@@ -1,5 +1,5 @@
 // Bump CACHE when you change app files so phones pick up the update.
-const CACHE = 'pickleball-v1';
+const CACHE = 'pickleball-v2';
 const ASSETS = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

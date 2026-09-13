@@ -2,6 +2,7 @@
 
 const KEY = 'pickleball-tracker-v1';
 const main = document.getElementById('main');
+const nav = document.getElementById('nav');
 
 // ---------- helpers ----------
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -12,14 +13,42 @@ const rm = n => (r2(n) < 0 ? '-' : '') + 'RM' + Math.abs(r2(n)).toFixed(2);
 const fmtDate = (d, opts) => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', opts || { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 const shortDate = d => fmtDate(d, { day: 'numeric', month: 'short' });
 const today = () => { const t = new Date(); t.setMinutes(t.getMinutes() - t.getTimezoneOffset()); return t.toISOString().slice(0, 10); };
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const joinNames = n => n.length < 2 ? n.join('') : `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`;
 
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => t.classList.remove('show'), 1800);
+  toast.timer = setTimeout(() => t.classList.remove('show'), 2000);
 }
+
+// Google Material icons (Apache 2.0), inlined so they work offline.
+const ICONS = {
+  event: 'M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z',
+  wallet: 'M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z',
+  group: 'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z',
+  cloud: 'M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z',
+  copy: 'M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z',
+  add: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z',
+  close: 'M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z',
+  check: 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
+  doneAll: 'M18 7l-1.41-1.41-6.34 6.34 1.41 1.41L18 7zm4.24-1.41L11.66 16.17 7.48 12l-1.41 1.41L11.66 19l12-12-1.42-1.41zM.41 13.41L6 19l1.41-1.41L1.83 12 .41 13.41z',
+  back: 'M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z',
+  delete: 'M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z',
+  edit: 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z',
+  download: 'M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z',
+  upload: 'M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z',
+  table: 'M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM8 20H4v-4h4v4zm0-6H4v-4h4v4zm0-6H4V4h4v4zm6 12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4zm6 12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4z',
+  chevron: 'M10 6L8.59 7.41 13.17 12l-4.58 4.58L10 18l6-6z',
+  circle: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z',
+  schedule: 'M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z',
+  personAdd: 'M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
+  history: 'M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z',
+  receipt: 'M18 17H6v-2h12v2zm0-4H6v-2h12v2zm0-4H6V7h12v2zM3 22l1.5-1.5L6 22l1.5-1.5L9 22l1.5-1.5L12 22l1.5-1.5L15 22l1.5-1.5L18 22l1.5-1.5L21 22V2l-1.5 1.5L18 2l-1.5 1.5L15 2l-1.5 1.5L12 2l-1.5 1.5L9 2 7.5 3.5 6 2 4.5 3.5 3 2v20z',
+};
+const icon = name => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name]}"/></svg>`;
 
 // ---------- storage ----------
 function seed() {
@@ -78,24 +107,18 @@ function calc(s) {
   };
 }
 const bank = () => r2(db.sessions.reduce((t, s) => t + calc(s).pl, 0));
+const dueUnpaidSessions = () => sorted().filter(s => calc(s).unpaid > 0);
+const totalUnpaid = () => r2(db.sessions.reduce((t, s) => t + calc(s).outstanding, 0));
 
 function playCounts() {
   const m = {};
   db.sessions.forEach(s => s.attendees.forEach(a => { m[a.playerId] = (m[a.playerId] || 0) + 1; }));
   return m;
 }
-
-// Unpaid grouped by player: [{ id, total, items: [session] }]
-function owed() {
-  const m = new Map();
-  sorted().reverse().filter(isDue).forEach(s => s.attendees.forEach(a => {
-    if (a.paid) return;
-    if (!m.has(a.playerId)) m.set(a.playerId, { id: a.playerId, total: 0, items: [] });
-    const o = m.get(a.playerId);
-    o.total = r2(o.total + s.fee);
-    o.items.push(s);
-  }));
-  return [...m.values()].sort((a, b) => b.total - a.total || pname(a.id).localeCompare(pname(b.id)));
+function owedByPlayer() {
+  const m = {};
+  db.sessions.filter(isDue).forEach(s => s.attendees.forEach(a => { if (!a.paid) m[a.playerId] = r2((m[a.playerId] || 0) + s.fee); }));
+  return m;
 }
 
 function findOrCreatePlayer(name) {
@@ -106,67 +129,115 @@ function findOrCreatePlayer(name) {
   return p;
 }
 
-// ---------- reminders (cheeky edition, random pick each copy) ----------
-const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+// ---------- selection (for reminders) ----------
+let selected = new Set();
+const selKey = (sid, pid) => sid + '|' + pid;
+const selectable = (s, a) => !a.paid && isDue(s);
 
-function sessionReminder(s) {
-  const list = s.attendees.filter(a => !a.paid).map((a, i) => `${i + 1}. ${pname(a.playerId)}`).join('\n');
-  const date = fmtDate(s.date), fee = rm(s.fee);
-  return pick([
-    `🚨 *PAYMENT PATROL* 🚨\n\n${date} — the court didn't book itself, and it definitely didn't pay for itself 👀\n\n*${fee}* per head. These legends are still "forgetting":\n${list}\n\nWe know where you dink. Pay up lah 😏🏓`,
-    `Knock knock 🚪\nWho's there?\n*${fee}*\n${fee} who?\n${fee} that you owe for ${date} 😌🏓\n\nStarring:\n${list}\n\nTransfer now and I'll pretend this never happened 🤝`,
-    `🏓 Friendly reminder (the first one is always friendly 😇)\n\nSession: ${date}\nDamage: *${fee}* per person\n\nStill chilling in the kitchen, not paying:\n${list}\n\nFaults are allowed on court. Not in my bank account 💸`,
-  ]);
+function pruneSelection() {
+  for (const k of selected) {
+    const [sid, pid] = k.split('|');
+    const s = session(sid);
+    const a = s?.attendees.find(x => x.playerId === pid);
+    if (!s || !a || !selectable(s, a)) selected.delete(k);
+  }
 }
-function allReminder(list) {
-  const lines = list.map(o => `• ${pname(o.id)} – *${rm(o.total)}* (${o.items.map(s => shortDate(s.date)).join(', ')})`).join('\n');
-  return pick([
-    `🧱 *THE WALL OF "I'LL PAY LATER"* 🧱\n\n${lines}\n\nClear your name before the next serve. Your paddle is watching 👀🏓`,
-    `📢 Attention pickleballers!\nThe tracker has spoken, and it is NOT happy 😤\n\n${lines}\n\nPay up so I can stop being the villain of this group chat 🙏😂`,
-    `🚨 Outstanding balances, sorted by guilt:\n\n${lines}\n\nYou dink, you pay. That's the rule lah 🏓💸`,
-  ]);
+// [{ s, names: [..] }] oldest session first
+function selectedGroups() {
+  return sorted().reverse()
+    .map(s => ({ s, names: s.attendees.filter(a => selected.has(selKey(s.id, a.playerId))).map(a => pname(a.playerId)) }))
+    .filter(g => g.names.length);
 }
-function playerReminder(o) {
-  const name = pname(o.id), total = rm(o.total);
-  const lines = o.items.map(s => `• ${fmtDate(s.date)} – ${rm(s.fee)}`).join('\n');
+
+// ---------- reminder (Yoda edition, random pick each copy) ----------
+function yodaReminder(groups) {
+  const who = joinNames([...new Set(groups.flatMap(g => g.names))]);
+  const details = groups.length === 1
+    ? `📅 ${fmtDate(groups[0].s.date)}\n💰 ${rm(groups[0].s.fee)} each, it is.`
+    : groups.map(g => `📅 ${fmtDate(g.s.date)} — ${rm(g.s.fee)}\n     ${joinNames(g.names)}`).join('\n');
   return pick([
-    `Hi ${name} 👋\n\nJust a tiny, gentle, absolutely-not-passive-aggressive reminder 😇🏓\n\n${lines}\n\nTotal: *${total}*\n\nThe court remembers. So do I 😏`,
-    `${name}! 🏓\n\nYour smash? Great. Your payment? Still loading... ⏳\n\n${lines}\n\nTotal: *${total}*\nTransfer whenever you're ready (ready = now) 😁`,
-    `Dear ${name},\n\nThe pickleball fund has a small hole in its heart 💔 shaped exactly like *${total}*\n\n${lines}\n\nPlease fix it. With love (and receipts) 🧾🏓`,
+    `Hmm. Played pickleball, you did. Paid, you have not. 🏓\n\n${details}\n\n${who} — pay, you must. Strong with the paddle you are; stronger with the payment you will become. 🙏`,
+    `A disturbance in the court fund, I sense. 🌌\n\n${details}\n\n${who}, transfer you should. Forget, you will not. Hmm? 😌`,
+    `Patience, the court owner has not. 🏓\n\n${details}\n\nClear your balance, ${who} must. Then at peace, the fund will be.\nMay the dink be with you. ✨`,
+    `Small, the amount is. Big, the gratitude will be. 🙏\n\n${details}\n\n${who} — do or do not pay. There is no "later". 🏓`,
   ]);
 }
 async function copy(text) {
-  try { await navigator.clipboard.writeText(text); toast('Copied — go get \'em 😏'); }
+  try { await navigator.clipboard.writeText(text); toast('Copied, the reminder is ✨'); }
   catch { prompt('Copy this:', text); }
+}
+
+// ---------- shared UI pieces ----------
+function playerRow(s, a, removable) {
+  const name = pname(a.playerId);
+  const canPick = selectable(s, a);
+  const sel = canPick && selected.has(selKey(s.id, a.playerId));
+  const [cls, ic, label] = a.paid ? ['paid', 'check', 'Paid'] : isDue(s) ? ['unpaid', 'circle', 'Unpaid'] : ['upcoming', 'schedule', 'Upcoming'];
+  return `
+    <li class="prow ${sel ? 'selected' : ''}">
+      <button class="pick" data-act="pick" data-sid="${s.id}" data-id="${a.playerId}" ${canPick ? '' : 'disabled'} aria-pressed="${sel}">
+        <span class="avatar">${sel ? icon('check') : esc(name.charAt(0).toUpperCase())}</span>
+        <span class="pname">${esc(name)}</span>
+      </button>
+      <button class="status ${cls}" data-act="toggle-paid" data-sid="${s.id}" data-id="${a.playerId}" aria-label="${a.paid ? 'Mark unpaid' : 'Mark paid'}: ${esc(name)}">${icon(ic)}${label}</button>
+      ${removable ? `<button class="iconbtn" data-act="remove-attendee" data-sid="${s.id}" data-id="${a.playerId}" aria-label="Remove ${esc(name)}">${icon('close')}</button>` : ''}
+    </li>`;
+}
+
+function selectAllButton(s) {
+  const keys = s.attendees.filter(a => selectable(s, a)).map(a => selKey(s.id, a.playerId));
+  if (!keys.length) return '';
+  const all = keys.every(k => selected.has(k));
+  return `<button class="btn text" data-act="select-session" data-sid="${s.id}">${icon('doneAll')}${all ? 'Clear' : 'Select unpaid'}</button>`;
+}
+
+function actionBar() {
+  const n = selected.size;
+  if (!n) return '';
+  return `
+    <div class="actionbar" role="region" aria-label="Selected players">
+      <button class="iconbtn" data-act="clear-sel" aria-label="Clear selection">${icon('close')}</button>
+      <span class="count">${n} selected</span>
+      <button class="btn ghost" data-act="sel-paid">${icon('check')}Paid</button>
+      <button class="btn primary" data-act="copy-sel">${icon('copy')}Remind</button>
+    </div>`;
 }
 
 // ---------- views ----------
 function viewSessions() {
   const list = sorted();
   const b = bank();
-  const out = r2(owed().reduce((t, o) => t + o.total, 0));
+  const out = totalUnpaid();
   return `
-    <header class="top"><h1><span class="seal" style="--c:var(--wood)">木</span>Sessions</h1></header>
-    <div class="stats">
-      <div class="stat" style="--c:var(--water)"><span>Bank</span><b class="${b < 0 ? 'neg' : 'pos'}">${rm(b)}</b></div>
-      <a class="stat" href="#/owed" style="--c:var(--fire)"><span>Unpaid</span><b class="${out > 0 ? 'neg' : ''}">${rm(out)}</b></a>
-    </div>
-    <button class="btn primary block" data-act="new-session">+ New session</button>
+    <header class="appbar"><h1>Pickleball<span class="sub">Payment tracker</span></h1></header>
+    <section class="hero">
+      <div class="k">Bank balance</div>
+      <div class="big">${rm(b)}</div>
+      <div class="minis">
+        <a class="mini" href="#/owed"><span>Unpaid</span><b>${rm(out)}</b></a>
+        <div class="mini"><span>Sessions</span><b>${db.sessions.length}</b></div>
+      </div>
+    </section>
     ${list.length ? list.map(s => {
       const c = calc(s);
-      return `<a class="card session ${!isDue(s) ? 'upcoming' : c.pl < 0 ? 'loss' : ''}" href="#/session/${s.id}">
-        <div>
-          <div class="title">${fmtDate(s.date)} ${!isDue(s) ? '<span class="pill">UPCOMING</span>' : ''}</div>
-          <div class="muted small">${c.paid}/${s.attendees.length} paid · ${rm(s.fee)}/pax${s.courts ? ` · ${s.courts} court${s.courts > 1 ? 's' : ''}` : ''}</div>
-        </div>
-        <div class="amt ${c.pl < 0 ? 'neg' : 'pos'}">${rm(c.pl)}</div>
-      </a>`;
-    }).join('') : '<p class="empty">No sessions yet.</p>'}`;
+      const d = new Date(s.date + 'T00:00:00');
+      return `
+        <a class="card scard" href="#/session/${s.id}">
+          <div class="datebox"><b>${d.getDate()}</b><small>${d.toLocaleDateString('en-GB', { month: 'short' })}</small></div>
+          <div class="mid">
+            <div class="title">${d.toLocaleDateString('en-GB', { weekday: 'long' })}${!isDue(s) ? '<span class="chip-s">Upcoming</span>' : c.unpaid ? `<span class="chip-s warn">${c.unpaid} unpaid</span>` : ''}</div>
+            <div class="muted small">${c.paid}/${s.attendees.length} paid · ${rm(s.fee)}/pax${s.courts ? ` · ${s.courts} court${s.courts > 1 ? 's' : ''}` : ''}</div>
+          </div>
+          <div class="amt ${c.pl < 0 ? 'neg' : 'pos'}">${rm(c.pl)}</div>
+          <span class="chev">${icon('chevron')}</span>
+        </a>`;
+    }).join('') : `<div class="empty">${icon('event')}No sessions yet.</div>`}
+    <button class="fab" data-act="new-session">${icon('add')}New session</button>`;
 }
 
 function viewSession(id) {
   const s = session(id);
-  if (!s) return `<p class="empty">Session not found. <a href="#/sessions">Back</a></p>`;
+  if (!s) return `<div class="empty">Session not found. <a href="#/sessions">Back</a></div>`;
   const c = calc(s);
   const counts = playCounts();
   const inIds = new Set(s.attendees.map(a => a.playerId));
@@ -177,9 +248,10 @@ function viewSession(id) {
   const prev = others.find(x => x.date <= s.date) || others[0];
 
   return `
-    <header class="top">
-      <a href="#/sessions" class="back">‹ Sessions</a>
-      <button class="btn ghost danger small" data-act="delete-session">Delete</button>
+    <header class="appbar">
+      <a class="iconbtn" href="#/sessions" aria-label="Back">${icon('back')}</a>
+      <h1>${fmtDate(s.date, { weekday: 'long', day: 'numeric', month: 'short' })}<span class="sub">${isDue(s) ? fmtDate(s.date, { year: 'numeric' }) : 'Upcoming session'}</span></h1>
+      <button class="iconbtn danger" data-act="delete-session" data-sid="${s.id}" aria-label="Delete session">${icon('delete')}</button>
     </header>
 
     <section class="card">
@@ -198,107 +270,106 @@ function viewSession(id) {
       <div class="sum"><span>Court cost</span><span>-${rm(s.courtCost)}</span></div>
       <div class="sum"><span>Expenditure</span><span>-${rm(c.expenses)}</span></div>
       <div class="sum total"><span>Profit / Loss</span><span class="${c.pl < 0 ? 'neg' : 'pos'}">${rm(c.pl)}</span></div>
-      ${c.outstanding ? `<div class="sum muted small"><span>Still to collect</span><span>${rm(c.outstanding)}</span></div>` : ''}
+      ${c.outstanding ? `<div class="sum small neg"><span>Still to collect</span><span>${rm(c.outstanding)}</span></div>` : ''}
     </section>
 
     <section class="card">
       <div class="sec-head">
-        <h2>Players (${s.attendees.length})</h2>
-        ${s.attendees.length > 1 && c.paid < s.attendees.length ? `<button class="btn small" data-act="all-paid">Mark all paid</button>` : ''}
+        <h2 class="card-title">Players (${s.attendees.length})</h2>
+        ${selectAllButton(s)}
       </div>
-      <ul class="list">
-        ${s.attendees.map(a => `
-          <li class="row">
-            <button class="pay ${a.paid ? 'on' : ''}" data-act="toggle-paid" data-id="${a.playerId}" aria-pressed="${a.paid}">
-              <span class="box">${a.paid ? '✓' : ''}</span>
-              <span class="name">${esc(pname(a.playerId))}</span>
-              ${a.paid ? '<span class="tag">Paid</span>' : isDue(s) ? '<span class="tag">Unpaid</span>' : '<span class="tag pending">Upcoming</span>'}
-            </button>
-            <button class="icon" data-act="remove-attendee" data-id="${a.playerId}" aria-label="Remove">×</button>
-          </li>`).join('') || '<li class="muted small" style="padding:8px 0">No players yet — add below.</li>'}
+      ${c.unpaid ? '<p class="hint">Tap names to select, then copy a reminder.</p>' : ''}
+      <ul class="plist">
+        ${s.attendees.map(a => playerRow(s, a, true)).join('') || '<li class="muted small" style="padding:8px 0">No players yet — add below.</li>'}
       </ul>
-      ${c.unpaid ? `
-        <div class="btn-row">
-          <button class="btn earth" data-act="copy-session">📋 Copy reminder (${c.unpaid} unpaid)</button>
-        </div>` : ''}
+      ${s.attendees.length > 1 && c.paid < s.attendees.length ? `<div class="btn-row"><button class="btn" data-act="all-paid" data-sid="${s.id}">${icon('doneAll')}Mark everyone paid</button></div>` : ''}
 
-      <h3>Add players</h3>
-      ${prev ? `<button class="btn small" data-act="add-prev" data-id="${prev.id}">+ Everyone from ${shortDate(prev.date)}</button>` : ''}
+      <div class="label">Add players</div>
+      ${prev ? `<button class="btn tonal" data-act="add-prev" data-sid="${s.id}" data-id="${prev.id}">${icon('history')}Everyone from ${shortDate(prev.date)}</button>` : ''}
       <div class="chips">
-        ${suggestions.map(p => `<button class="chip" data-act="add-attendee" data-id="${p.id}">+ ${esc(p.name)}</button>`).join('')}
+        ${suggestions.map(p => `<button class="chip" data-act="add-attendee" data-sid="${s.id}" data-id="${p.id}">${icon('add')}${esc(p.name)}</button>`).join('')}
       </div>
       <form class="inline" data-form="new-player">
-        <input name="name" placeholder="New player name" autocomplete="off" required>
-        <button class="btn">Add</button>
+        <input name="name" placeholder="New player name" autocomplete="off" required aria-label="New player name">
+        <button class="btn primary" aria-label="Add player">${icon('personAdd')}</button>
       </form>
     </section>
 
     <section class="card">
-      <h2>Expenditure</h2>
-      <ul class="list">
+      <h2 class="card-title">Expenditure</h2>
+      <ul class="plist">
         ${s.expenses.map(e => `
-          <li class="row exp">
+          <li class="erow">
             <span class="name">${esc(e.name)}</span>
             <span class="amt">${rm(e.amount)}</span>
-            <button class="icon" data-act="remove-expense" data-id="${e.id}" aria-label="Remove">×</button>
+            <button class="iconbtn" data-act="remove-expense" data-sid="${s.id}" data-id="${e.id}" aria-label="Remove ${esc(e.name)}">${icon('close')}</button>
           </li>`).join('') || '<li class="muted small" style="padding:8px 0">None</li>'}
       </ul>
       <form class="inline" data-form="expense">
-        <input name="name" placeholder="What? (e.g. Balls)" autocomplete="off" required>
-        <input name="amount" class="amt-in" type="number" inputmode="decimal" step="0.01" min="0" placeholder="RM" required>
-        <button class="btn">Add</button>
+        <input name="name" placeholder="What? (e.g. Balls)" autocomplete="off" required aria-label="Expense item">
+        <input name="amount" class="amt-in" type="number" inputmode="decimal" step="0.01" min="0" placeholder="RM" required aria-label="Amount">
+        <button class="btn primary" aria-label="Add expense">${icon('add')}</button>
       </form>
-    </section>`;
+    </section>
+    ${actionBar()}`;
 }
 
 function viewOwed() {
-  const list = owed();
-  const total = r2(list.reduce((t, o) => t + o.total, 0));
+  const list = dueUnpaidSessions();
+  const players = new Set(list.flatMap(s => s.attendees.filter(a => !a.paid).map(a => a.playerId)));
   return `
-    <header class="top"><h1><span class="seal" style="--c:var(--fire)">火</span>Unpaid</h1></header>
-    <div class="stats">
-      <div class="stat" style="--c:var(--fire)"><span>Total unpaid</span><b class="${total ? 'neg' : 'pos'}">${rm(total)}</b></div>
-      <div class="stat" style="--c:var(--earth)"><span>Players</span><b>${list.length}</b></div>
-    </div>
-    ${!list.length ? '<p class="empty">Everyone has paid 🎉</p>' : `
-      <div class="btn-row" style="margin:0 0 8px">
-        <button class="btn earth" data-act="copy-all">📋 Copy group reminder</button>
+    <header class="appbar"><h1>Unpaid<span class="sub">Sessions on or before today</span></h1></header>
+    <section class="hero">
+      <div class="k">Total to collect</div>
+      <div class="big">${rm(totalUnpaid())}</div>
+      <div class="minis">
+        <div class="mini"><span>Sessions</span><b>${list.length}</b></div>
+        <div class="mini"><span>Players</span><b>${players.size}</b></div>
       </div>
-      <p class="note">Only sessions on or before today are counted. Tap a date to mark that session paid.</p>
-      ${list.map(o => `
-        <div class="card">
-          <div class="sec-head"><h2>${esc(pname(o.id))}</h2><span class="amt neg">${rm(o.total)}</span></div>
-          <div class="chips">
-            ${o.items.map(s => `<button class="chip" data-act="owed-paid" data-id="${s.id}" data-player="${o.id}">✓ ${shortDate(s.date)} · ${rm(s.fee)}</button>`).join('')}
-          </div>
-          <div class="btn-row" style="margin-top:4px">
-            <button class="btn small" data-act="copy-player" data-id="${o.id}">📋 Copy reminder</button>
-          </div>
-        </div>`).join('')}`}`;
+    </section>
+    ${!list.length ? `<div class="empty">${icon('doneAll')}Everyone has paid. Pleased, Master Yoda is.</div>` : `
+      <p class="hint">Tap names (across any sessions) to select, then copy one reminder.</p>
+      ${list.map(s => {
+        const c = calc(s);
+        return `
+          <section class="card">
+            <div class="sec-head">
+              <a href="#/session/${s.id}" style="color:inherit;text-decoration:none">
+                <h2 class="card-title">${fmtDate(s.date)}</h2>
+                <div class="muted small">${c.unpaid} unpaid · ${rm(s.fee)} each</div>
+              </a>
+              <span class="amt neg">${rm(c.outstanding)}</span>
+            </div>
+            <ul class="plist">${s.attendees.filter(a => !a.paid).map(a => playerRow(s, a, false)).join('')}</ul>
+            <div class="btn-row">${selectAllButton(s)}</div>
+          </section>`;
+      }).join('')}`}
+    ${actionBar()}`;
 }
 
 function viewPlayers() {
   const counts = playCounts();
-  const owes = Object.fromEntries(owed().map(o => [o.id, o.total]));
+  const owes = owedByPlayer();
   const list = [...db.players].sort((a, b) => a.name.localeCompare(b.name));
   return `
-    <header class="top"><h1><span class="seal" style="--c:var(--earth)">土</span>Players</h1></header>
+    <header class="appbar"><h1>Players<span class="sub">${db.players.length} people</span></h1></header>
     <section class="card">
       <form class="inline" data-form="new-player" style="margin:0">
-        <input name="name" placeholder="New player name" autocomplete="off" required>
-        <button class="btn">Add</button>
+        <input name="name" placeholder="New player name" autocomplete="off" required aria-label="New player name">
+        <button class="btn primary" aria-label="Add player">${icon('personAdd')}</button>
       </form>
     </section>
     <section class="card">
-      <ul class="list">
+      <ul class="plist">
         ${list.map(p => `
-          <li class="row">
-            <div class="name player-info">
-              <div class="title">${esc(p.name)}</div>
+          <li class="prow">
+            <span class="avatar">${esc(p.name.charAt(0).toUpperCase())}</span>
+            <div class="player-info" style="margin-left:8px">
+              <div class="pname" style="font-weight:600">${esc(p.name)}</div>
               <div class="muted small">${counts[p.id] || 0} session${counts[p.id] === 1 ? '' : 's'}${owes[p.id] ? ` · <span class="neg">owes ${rm(owes[p.id])}</span>` : ''}</div>
             </div>
-            <button class="btn ghost small" data-act="rename-player" data-id="${p.id}">Rename</button>
-            <button class="icon" data-act="delete-player" data-id="${p.id}" aria-label="Delete">×</button>
+            <button class="iconbtn" data-act="rename-player" data-id="${p.id}" aria-label="Rename ${esc(p.name)}">${icon('edit')}</button>
+            <button class="iconbtn" data-act="delete-player" data-id="${p.id}" aria-label="Delete ${esc(p.name)}">${icon('delete')}</button>
           </li>`).join('') || '<li class="muted small">No players yet.</li>'}
       </ul>
     </section>`;
@@ -306,25 +377,26 @@ function viewPlayers() {
 
 function viewBackup() {
   return `
-    <header class="top"><h1><span class="seal" style="--c:var(--water)">水</span>Backup</h1></header>
+    <header class="appbar"><h1>Backup<span class="sub">Last backup: ${db.lastBackup ? fmtDate(db.lastBackup) : 'never'}</span></h1></header>
     <section class="card">
-      <p class="note">Your data is saved only on this phone. Clearing Chrome's site data or uninstalling the app will erase it — export a backup regularly (e.g. to Google Drive).</p>
-      <p class="small">Last backup: <b>${db.lastBackup ? fmtDate(db.lastBackup) : 'never'}</b></p>
+      <p class="muted" style="margin-top:0">Your data is saved only on this phone. Clearing Chrome's site data or uninstalling the app erases it — export a backup regularly (e.g. to Google Drive).</p>
       <div class="btn-row">
-        <button class="btn primary" data-act="export-json">Export backup</button>
-        <button class="btn" data-act="import-json">Import backup</button>
+        <button class="btn primary block" data-act="export-json">${icon('download')}Export backup</button>
       </div>
       <div class="btn-row">
-        <button class="btn" data-act="export-csv">Export CSV (for Google Sheets)</button>
+        <button class="btn" data-act="import-json">${icon('upload')}Import</button>
+        <button class="btn" data-act="export-csv">${icon('table')}Export CSV</button>
       </div>
     </section>
     <section class="card">
       <p class="small muted" style="margin-top:0">${db.sessions.length} sessions · ${db.players.length} players</p>
-      <button class="btn danger" data-act="reset">Erase all data</button>
+      <button class="btn" data-act="reset">${icon('delete')}Erase all data</button>
     </section>`;
 }
 
 // ---------- routing & render ----------
+const TABS = [['sessions', 'event', 'Sessions'], ['owed', 'wallet', 'Unpaid'], ['players', 'group', 'Players'], ['backup', 'cloud', 'Backup']];
+
 function parseHash() {
   const [, view = 'sessions', id] = location.hash.slice(1).split('/');
   return { view: view || 'sessions', id };
@@ -335,14 +407,21 @@ function currentSession() {
 }
 
 function render() {
+  pruneSelection();
   const { view, id } = parseHash();
   const views = { sessions: viewSessions, session: () => viewSession(id), owed: viewOwed, players: viewPlayers, backup: viewBackup };
   main.innerHTML = (views[view] || viewSessions)();
+  document.body.classList.toggle('has-bar', selected.size > 0);
+
   const tab = view === 'session' ? 'sessions' : view;
-  document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('active', a.dataset.view === tab));
+  const unpaidCount = dueUnpaidSessions().reduce((t, s) => t + calc(s).unpaid, 0);
+  nav.innerHTML = TABS.map(([v, ic, label]) => `
+    <a href="#/${v}" class="${v === tab ? 'active' : ''}" ${v === tab ? 'aria-current="page"' : ''}>
+      <span class="ind">${icon(ic)}${v === 'owed' && unpaidCount ? `<span class="badge">${unpaidCount}</span>` : ''}</span>${label}
+    </a>`).join('');
 }
 
-window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
+window.addEventListener('hashchange', () => { selected.clear(); render(); window.scrollTo(0, 0); });
 
 // ---------- files ----------
 function download(name, text, type) {
@@ -394,6 +473,7 @@ document.getElementById('import-file').addEventListener('change', async e => {
 });
 
 // ---------- actions ----------
+// Each action receives (el, s) where s is the session from data-sid (or the current page).
 const actions = {
   'new-session'() {
     const last = sorted()[0];
@@ -402,41 +482,57 @@ const actions = {
     save();
     location.hash = '#/session/' + s.id;
   },
-  'delete-session'(_, s) {
+  'delete-session'(el, s) {
     if (!confirm(`Delete session on ${fmtDate(s.date)}?`)) return;
     db.sessions = db.sessions.filter(x => x.id !== s.id);
     save();
     location.hash = '#/sessions';
   },
-  'toggle-paid'(id, s) { const a = s.attendees.find(x => x.playerId === id); a.paid = !a.paid; commit(); },
-  'all-paid'(_, s) { s.attendees.forEach(a => { a.paid = true; }); commit(); },
-  'remove-attendee'(id, s) { s.attendees = s.attendees.filter(a => a.playerId !== id); commit(); },
-  'add-attendee'(id, s) { s.attendees.push({ playerId: id, paid: false }); commit(); },
-  'add-prev'(id, s) {
-    session(id).attendees.forEach(a => {
+  'pick'(el, s) {
+    const k = selKey(s.id, el.dataset.id);
+    selected.has(k) ? selected.delete(k) : selected.add(k);
+    render();
+  },
+  'select-session'(el, s) {
+    const keys = s.attendees.filter(a => selectable(s, a)).map(a => selKey(s.id, a.playerId));
+    const all = keys.every(k => selected.has(k));
+    keys.forEach(k => all ? selected.delete(k) : selected.add(k));
+    render();
+  },
+  'clear-sel'() { selected.clear(); render(); },
+  'copy-sel'() { copy(yodaReminder(selectedGroups())); },
+  'sel-paid'() {
+    const n = selected.size;
+    for (const k of selected) {
+      const [sid, pid] = k.split('|');
+      const a = session(sid)?.attendees.find(x => x.playerId === pid);
+      if (a) a.paid = true;
+    }
+    selected.clear();
+    commit();
+    toast(`${n} marked paid`);
+  },
+  'toggle-paid'(el, s) { const a = s.attendees.find(x => x.playerId === el.dataset.id); a.paid = !a.paid; commit(); },
+  'all-paid'(el, s) { s.attendees.forEach(a => { a.paid = true; }); commit(); },
+  'remove-attendee'(el, s) { s.attendees = s.attendees.filter(a => a.playerId !== el.dataset.id); commit(); },
+  'add-attendee'(el, s) { s.attendees.push({ playerId: el.dataset.id, paid: false }); commit(); },
+  'add-prev'(el, s) {
+    session(el.dataset.id).attendees.forEach(a => {
       if (!s.attendees.some(x => x.playerId === a.playerId)) s.attendees.push({ playerId: a.playerId, paid: false });
     });
     commit();
   },
-  'remove-expense'(id, s) { s.expenses = s.expenses.filter(e => e.id !== id); commit(); },
-  'copy-session'(_, s) { copy(sessionReminder(s)); },
-  'copy-all'() { copy(allReminder(owed())); },
-  'copy-player'(id) { copy(playerReminder(owed().find(o => o.id === id))); },
-  'owed-paid'(id, _, el) {
-    const a = session(id).attendees.find(x => x.playerId === el.dataset.player);
-    a.paid = true;
-    commit();
-    toast(`${pname(a.playerId)} marked paid`);
-  },
-  'rename-player'(id) {
-    const p = player(id);
+  'remove-expense'(el, s) { s.expenses = s.expenses.filter(e => e.id !== el.dataset.id); commit(); },
+  'rename-player'(el) {
+    const p = player(el.dataset.id);
     const name = prompt('Rename player', p.name)?.trim();
     if (!name || name === p.name) return;
-    if (db.players.some(x => x.id !== id && x.name.toLowerCase() === name.toLowerCase())) return alert('A player with that name already exists.');
+    if (db.players.some(x => x.id !== p.id && x.name.toLowerCase() === name.toLowerCase())) return alert('A player with that name already exists.');
     p.name = name;
     commit();
   },
-  'delete-player'(id) {
+  'delete-player'(el) {
+    const id = el.dataset.id;
     const n = playCounts()[id] || 0;
     const msg = n
       ? `${pname(id)} is in ${n} session(s). Deleting removes them from those sessions and changes their revenue. Continue?`
@@ -458,6 +554,7 @@ const actions = {
     if (!confirm('Erase ALL sessions and players? Export a backup first if unsure.')) return;
     if (prompt('Type ERASE to confirm') !== 'ERASE') return;
     db = { players: [], sessions: [], lastBackup: null };
+    selected.clear();
     commit();
   },
 };
@@ -465,7 +562,7 @@ const actions = {
 main.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (!el) return;
-  actions[el.dataset.act]?.(el.dataset.id, currentSession(), el);
+  actions[el.dataset.act]?.(el, session(el.dataset.sid) || currentSession());
 });
 
 main.addEventListener('change', e => {

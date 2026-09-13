@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#b8392b">
+  <meta name="theme-color" content="#fff8f7">
   <title>Pickleball Tracker</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png">
@@ -11,13 +11,8 @@
 </head>
 <body>
   <main id="main"></main>
-  <nav class="tabs">
-    <a href="#/sessions" data-view="sessions" style="--c:var(--wood)"><i>木</i>Sessions</a>
-    <a href="#/owed" data-view="owed" style="--c:var(--fire)"><i>火</i>Unpaid</a>
-    <a href="#/players" data-view="players" style="--c:var(--earth)"><i>土</i>Players</a>
-    <a href="#/backup" data-view="backup" style="--c:var(--water)"><i>水</i>Backup</a>
-  </nav>
-  <div id="toast" role="status"></div>
+  <nav class="tabs" id="nav"></nav>
+  <div id="toast" role="status" aria-live="polite"></div>
   <input type="file" id="import-file" accept="application/json,.json" hidden>
   <script src="app.js"></script>
 </body>
