@@ -1,5 +1,5 @@
-// Bump CACHE when you change app files so phones pick up the update.
-const CACHE = 'pickleball-v2';
+// Bump CACHE when you change app files.
+const CACHE = 'pickleball-v4';
 const ASSETS = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -14,16 +14,21 @@ self.addEventListener('activate', e => {
   );
 });
 
-// Serve from cache instantly, refresh the cache in the background.
+// Network first (always the latest version when online), cache as offline fallback.
+// Gives up on the network after 3s so a weak signal at the court still opens fast.
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
-  e.respondWith(
-    caches.open(CACHE).then(async cache => {
-      const cached = await cache.match(e.request, { ignoreSearch: true });
-      const network = fetch(e.request)
-        .then(res => { if (res.ok) cache.put(e.request, res.clone()); return res; })
-        .catch(() => cached);
-      return cached || network;
-    })
-  );
+  e.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    const network = fetch(e.request).then(res => {
+      if (res.ok) cache.put(e.request, res.clone());
+      return res;
+    });
+    const timeout = new Promise(resolve => setTimeout(resolve, 3000));
+    try {
+      const res = await Promise.race([network, timeout]);
+      if (res) return res;
+    } catch {}
+    return (await cache.match(e.request, { ignoreSearch: true })) || network;
+  })());
 });

@@ -71,7 +71,29 @@ body.has-bar main { padding-bottom: calc(168px + env(safe-area-inset-bottom)); }
 .btn.block { width: 100%; min-height: 48px; }
 .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .btn-row .btn { flex: 1; }
-.fab { position: fixed; right: max(16px, calc(50% - 304px)); bottom: calc(88px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 20px 0 16px; border-radius: 16px; border: 0; background: var(--primary); color: var(--on-primary); font: inherit; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(120, 20, 20, .28); }
+.quick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.quick .btn { min-height: 48px; border-radius: 14px; }
+.hero .projected { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 13px; opacity: .92; }
+.hero .projected .ic { width: 18px; height: 18px; }
+
+/* Home filter */
+.filters { margin: 0 0 12px; }
+.chip.on { background: var(--primary-container); border-color: transparent; color: var(--on-primary-container); font-weight: 600; }
+.chip.on .ic { color: var(--on-primary-container); }
+.chip:not(.on) { padding-left: 12px; }
+
+/* Expenses */
+.cat-box { color: var(--primary-strong); }
+.cat-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
+.cat-sum > div { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 8px; }
+.cat-sum .cat-ic { grid-row: span 2; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--tonal); color: var(--primary-strong); }
+.cat-sum .cat-ic .ic { width: 20px; height: 20px; }
+.cats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.cat { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 4px 10px; border: 1px solid var(--outline-strong); border-radius: 14px; background: var(--card); font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.cat input { position: absolute; opacity: 0; pointer-events: none; }
+.cat:has(input:checked) { background: var(--primary-container); border-color: var(--primary); color: var(--on-primary-container); }
+.cat:has(input:focus-visible) { outline: 3px solid #f19b91; outline-offset: 2px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
 /* Forms */
 .field { display: block; margin-bottom: 12px; }
@@ -131,6 +153,15 @@ input:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-co
 .tabs a.active { color: var(--text); font-weight: 700; }
 .tabs a.active .ind { background: var(--primary-container); color: var(--on-primary-container); }
 .tabs .badge { position: absolute; top: -2px; left: 38px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; }
+
+/* Dialog */
+.dlg { border: 0; border-radius: 28px; padding: 24px; width: min(360px, calc(100vw - 48px)); background: var(--surface); color: var(--text); box-shadow: 0 8px 32px rgba(35, 25, 24, .3); }
+.dlg::backdrop { background: rgba(35, 25, 24, .45); }
+.dlg h2 { font-size: 22px; font-weight: 500; margin: 0 0 12px; }
+.dlg p { margin: 0 0 16px; color: var(--muted); white-space: pre-line; }
+.dlg input { margin-bottom: 16px; }
+.dlg textarea { display: block; width: 100%; min-height: 180px; margin-bottom: 16px; font: inherit; font-size: 14px; color: inherit; background: var(--card); border: 1px solid var(--outline-strong); border-radius: 12px; padding: 10px; resize: vertical; }
+.dlg-actions { display: flex; flex-direction: row-reverse; gap: 8px; }
 
 #toast { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translate(-50%, 16px); background: var(--inverse); color: var(--on-inverse); padding: 12px 18px; border-radius: 8px; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; font-weight: 500; white-space: nowrap; z-index: 10; }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }

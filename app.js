@@ -16,6 +16,41 @@ const today = () => { const t = new Date(); t.setMinutes(t.getMinutes() - t.getT
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 const joinNames = n => n.length < 2 ? n.join('') : `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`;
 
+// In-app dialog (native confirm/prompt/alert can be silently blocked by the browser).
+// Resolves: true/false for confirm, string/null when `input` is given.
+function ask({ title, message = '', ok = 'OK', cancel = 'Cancel', input = null, text = null }) {
+  return new Promise(resolve => {
+    const d = document.createElement('dialog');
+    d.className = 'dlg';
+    d.innerHTML = `
+      <form method="dialog">
+        <h2>${esc(title)}</h2>
+        ${message ? `<p>${esc(message)}</p>` : ''}
+        ${input != null ? `<input name="v" value="${esc(input)}" autocomplete="off" required>` : ''}
+        ${text != null ? `<textarea readonly>${esc(text)}</textarea>` : ''}
+        <div class="dlg-actions">
+          <button value="ok" class="btn primary">${esc(ok)}</button>
+          ${cancel ? `<button value="cancel" class="btn text" formnovalidate>${esc(cancel)}</button>` : ''}
+        </div>
+      </form>`;
+    document.body.appendChild(d);
+    // Enter-key submits have no submitter button; treat them as OK.
+    d.querySelector('form').addEventListener('submit', e => {
+      e.preventDefault();
+      d.close(e.submitter?.value || 'ok');
+    });
+    d.addEventListener('close', () => {
+      const confirmed = d.returnValue === 'ok';
+      const value = input != null ? (confirmed ? d.querySelector('input').value.trim() : null) : confirmed;
+      d.remove();
+      resolve(value);
+    });
+    d.showModal();
+    if (input != null) d.querySelector('input').select();
+    if (text != null) d.querySelector('textarea').select();
+  });
+}
+
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -47,7 +82,16 @@ const ICONS = {
   personAdd: 'M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
   history: 'M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z',
   receipt: 'M18 17H6v-2h12v2zm0-4H6v-2h12v2zm0-4H6V7h12v2zM3 22l1.5-1.5L6 22l1.5-1.5L9 22l1.5-1.5L12 22l1.5-1.5L15 22l1.5-1.5L18 22l1.5-1.5L21 22V2l-1.5 1.5L18 2l-1.5 1.5L15 2l-1.5 1.5L12 2l-1.5 1.5L9 2 7.5 3.5 6 2 4.5 3.5 3 2v20z',
+  balls: 'M19.52 2.49C17.18.15 12.9.62 9.97 3.55c-1.6 1.6-2.52 3.87-2.54 5.46-.02 1.58.26 3.89-1.35 5.5l-4.24 4.24 1.42 1.42 4.24-4.24c1.61-1.61 3.92-1.33 5.5-1.35s3.86-.94 5.46-2.54c2.92-2.93 3.4-7.21 1.06-9.55zm-9.2 9.19c-1.53-1.53-1.05-4.61 1.06-6.72s5.18-2.59 6.72-1.06c1.53 1.53 1.05 4.61-1.06 6.72s-5.18 2.59-6.72 1.06zM18 17c.53 0 1.04.21 1.41.59.78.78.78 2.05 0 2.83-.37.37-.88.58-1.41.58s-1.04-.21-1.41-.59c-.78-.78-.78-2.05 0-2.83.37-.37.88-.58 1.41-.58m0-2c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4z',
+  drink: 'M3 2l2.01 18.23C5.13 21.23 5.97 22 7 22h10c1.03 0 1.87-.77 1.99-1.77L21 2H3zm9 17c-1.66 0-3-1.34-3-3 0-2 3-5.4 3-5.4s3 3.4 3 5.4c0 1.66-1.34 3-3 3zm6.33-11H5.67l-.44-4h13.53l-.43 4z',
+  food: 'M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z',
+  more: 'M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z',
+  trending: 'M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z',
 };
+
+// General expenses (not tied to a session)
+const CATEGORIES = [['balls', 'Balls', 'balls'], ['drinks', 'Drinks', 'drink'], ['food', 'Food', 'food'], ['other', 'Other', 'more']];
+const category = key => CATEGORIES.find(c => c[0] === key) || CATEGORIES[3];
 const icon = name => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name]}"/></svg>`;
 
 // ---------- storage ----------
@@ -64,14 +108,45 @@ function seed() {
       s('2026-09-16', 75, [], []),
       s('2026-09-19', 75, [], []),
     ],
+    expenses: [],
     lastBackup: null,
+  };
+}
+
+// Repair missing/invalid fields so a partial or hand-edited backup can't crash the app.
+const cleanId = id => String(id ?? '').replace(/[^\w-]/g, '') || uid();
+function normalize(d) {
+  const players = d.players.filter(p => p && p.name).map(p => ({ id: cleanId(p.id), name: String(p.name).trim() }));
+  const ids = new Set(players.map(p => p.id));
+  return {
+    players,
+    sessions: d.sessions.filter(Boolean).map(s => ({
+      id: cleanId(s.id),
+      date: /^\d{4}-\d{2}-\d{2}$/.test(s.date) ? s.date : today(),
+      fee: Math.max(0, num(s.fee)),
+      courtCost: Math.max(0, num(s.courtCost)),
+      courts: parseInt(s.courts, 10) > 0 ? parseInt(s.courts, 10) : null,
+      expenses: (Array.isArray(s.expenses) ? s.expenses : []).filter(Boolean)
+        .map(e => ({ id: cleanId(e.id), name: String(e.name ?? ''), amount: Math.max(0, num(e.amount)) })),
+      attendees: (Array.isArray(s.attendees) ? s.attendees : [])
+        .map(a => ({ playerId: cleanId(a?.playerId), paid: !!a?.paid }))
+        .filter((a, i, arr) => ids.has(a.playerId) && arr.findIndex(x => x.playerId === a.playerId) === i),
+    })),
+    expenses: (Array.isArray(d.expenses) ? d.expenses : []).filter(Boolean).map(e => ({
+      id: cleanId(e.id),
+      date: /^\d{4}-\d{2}-\d{2}$/.test(e.date) ? e.date : today(),
+      category: category(e.category)[0],
+      amount: Math.max(0, num(e.amount)),
+      note: String(e.note ?? ''),
+    })),
+    lastBackup: typeof d.lastBackup === 'string' ? d.lastBackup : null,
   };
 }
 
 function load() {
   try {
     const d = JSON.parse(localStorage.getItem(KEY));
-    if (d && Array.isArray(d.sessions) && Array.isArray(d.players)) return d;
+    if (d && Array.isArray(d.sessions) && Array.isArray(d.players)) return normalize(d);
   } catch {}
   const d = seed();
   localStorage.setItem(KEY, JSON.stringify(d));
@@ -106,7 +181,14 @@ function calc(s) {
     perCourt: s.courts ? r2(s.courtCost / s.courts) : null,
   };
 }
-const bank = () => r2(db.sessions.reduce((t, s) => t + calc(s).pl, 0));
+// Balance by date: sessions/expenses up to today count now; later ones are "booked ahead".
+function ledger() {
+  const t = today();
+  let now = 0, upcoming = 0;
+  db.sessions.forEach(s => { const pl = calc(s).pl; if (s.date <= t) now += pl; else upcoming += pl; });
+  db.expenses.forEach(e => { if (e.date <= t) now -= e.amount; else upcoming -= e.amount; });
+  return { now: r2(now), upcoming: r2(upcoming), projected: r2(now + upcoming) };
+}
 const dueUnpaidSessions = () => sorted().filter(s => calc(s).unpaid > 0);
 const totalUnpaid = () => r2(db.sessions.reduce((t, s) => t + calc(s).outstanding, 0));
 
@@ -164,7 +246,7 @@ function yodaReminder(groups) {
 }
 async function copy(text) {
   try { await navigator.clipboard.writeText(text); toast('Copied, the reminder is ✨'); }
-  catch { prompt('Copy this:', text); }
+  catch { ask({ title: 'Copy this message', text, ok: 'Done', cancel: null }); }
 }
 
 // ---------- shared UI pieces ----------
@@ -204,35 +286,116 @@ function actionBar() {
 }
 
 // ---------- views ----------
+let homeFilter = 'all';
+try { homeFilter = localStorage.getItem('pb-home-filter') || 'all'; } catch {}
+
+function sessionCard(s) {
+  const c = calc(s);
+  const d = new Date(s.date + 'T00:00:00');
+  return `
+    <a class="card scard" href="#/session/${s.id}">
+      <div class="datebox"><b>${d.getDate()}</b><small>${d.toLocaleDateString('en-GB', { month: 'short' })}</small></div>
+      <div class="mid">
+        <div class="title">${d.toLocaleDateString('en-GB', { weekday: 'long' })}${!isDue(s) ? '<span class="chip-s">Upcoming</span>' : c.unpaid ? `<span class="chip-s warn">${c.unpaid} unpaid</span>` : ''}</div>
+        <div class="muted small">${c.paid}/${s.attendees.length} paid · ${rm(s.fee)}/pax${s.courts ? ` · ${s.courts} court${s.courts > 1 ? 's' : ''}` : ''}</div>
+      </div>
+      <div class="amt ${c.pl < 0 ? 'neg' : 'pos'}">${rm(c.pl)}</div>
+      <span class="chev">${icon('chevron')}</span>
+    </a>`;
+}
+
+function expenseCard(e) {
+  const [, label, ic] = category(e.category);
+  return `
+    <a class="card scard" href="#/expense/${e.id}">
+      <div class="datebox cat-box">${icon(ic)}</div>
+      <div class="mid">
+        <div class="title">${label}${e.date > today() ? '<span class="chip-s">Upcoming</span>' : ''}</div>
+        <div class="muted small pname">${fmtDate(e.date, { weekday: 'short', day: 'numeric', month: 'short' })}${e.note ? ` · ${esc(e.note)}` : ''}</div>
+      </div>
+      <div class="amt neg">-${rm(e.amount)}</div>
+      <span class="chev">${icon('chevron')}</span>
+    </a>`;
+}
+
 function viewSessions() {
-  const list = sorted();
-  const b = bank();
+  const l = ledger();
   const out = totalUnpaid();
+  const items = [
+    ...(homeFilter !== 'expenses' ? db.sessions.map(s => ({ date: s.date, html: () => sessionCard(s) })) : []),
+    ...(homeFilter !== 'sessions' ? db.expenses.map(e => ({ date: e.date, html: () => expenseCard(e) })) : []),
+  ].sort((a, b) => b.date.localeCompare(a.date));
+  const filters = [['all', 'All', db.sessions.length + db.expenses.length], ['sessions', 'Sessions', db.sessions.length], ['expenses', 'Expenses', db.expenses.length]];
+
+  const catTotals = CATEGORIES
+    .map(([key, label, ic]) => [label, ic, r2(db.expenses.filter(e => e.category === key).reduce((t, e) => t + e.amount, 0))])
+    .filter(c => c[2]);
+
   return `
     <header class="appbar"><h1>Pickleball<span class="sub">Payment tracker</span></h1></header>
     <section class="hero">
-      <div class="k">Bank balance</div>
-      <div class="big">${rm(b)}</div>
+      <div class="k">Bank balance · today</div>
+      <div class="big">${rm(l.now)}</div>
       <div class="minis">
-        <a class="mini" href="#/owed"><span>Unpaid</span><b>${rm(out)}</b></a>
-        <div class="mini"><span>Sessions</span><b>${db.sessions.length}</b></div>
+        <a class="mini" href="#/owed"><span>To collect</span><b>${rm(out)}</b></a>
+        <div class="mini"><span>Booked ahead</span><b>${rm(l.upcoming)}</b></div>
       </div>
+      ${l.upcoming ? `<div class="projected">${icon('trending')}After upcoming sessions: <b>${rm(l.projected)}</b></div>` : ''}
     </section>
-    ${list.length ? list.map(s => {
-      const c = calc(s);
-      const d = new Date(s.date + 'T00:00:00');
-      return `
-        <a class="card scard" href="#/session/${s.id}">
-          <div class="datebox"><b>${d.getDate()}</b><small>${d.toLocaleDateString('en-GB', { month: 'short' })}</small></div>
-          <div class="mid">
-            <div class="title">${d.toLocaleDateString('en-GB', { weekday: 'long' })}${!isDue(s) ? '<span class="chip-s">Upcoming</span>' : c.unpaid ? `<span class="chip-s warn">${c.unpaid} unpaid</span>` : ''}</div>
-            <div class="muted small">${c.paid}/${s.attendees.length} paid · ${rm(s.fee)}/pax${s.courts ? ` · ${s.courts} court${s.courts > 1 ? 's' : ''}` : ''}</div>
-          </div>
-          <div class="amt ${c.pl < 0 ? 'neg' : 'pos'}">${rm(c.pl)}</div>
-          <span class="chev">${icon('chevron')}</span>
-        </a>`;
-    }).join('') : `<div class="empty">${icon('event')}No sessions yet.</div>`}
-    <button class="fab" data-act="new-session">${icon('add')}New session</button>`;
+
+    <div class="quick">
+      <button class="btn primary" data-act="new-session">${icon('add')}New session</button>
+      <a class="btn tonal" href="#/expense/new">${icon('receipt')}New expense</a>
+    </div>
+
+    <div class="chips filters" role="tablist">
+      ${filters.map(([key, label, n]) => `<button class="chip ${homeFilter === key ? 'on' : ''}" role="tab" aria-selected="${homeFilter === key}" data-act="filter" data-id="${key}">${homeFilter === key ? icon('check') : ''}${label} <span class="muted">${n}</span></button>`).join('')}
+    </div>
+
+    ${homeFilter === 'expenses' && catTotals.length ? `
+      <section class="card cat-sum">
+        ${catTotals.map(([label, ic, total]) => `<div><span class="cat-ic">${icon(ic)}</span><span class="muted small">${label}</span><b class="amt">${rm(total)}</b></div>`).join('')}
+      </section>` : ''}
+
+    ${items.length ? items.map(i => i.html()).join('') : `<div class="empty">${icon(homeFilter === 'expenses' ? 'receipt' : 'event')}Nothing here yet.</div>`}`;
+}
+
+function viewExpense(id) {
+  const isNew = id === 'new';
+  const e = isNew ? { date: today(), category: 'balls', amount: '', note: '' } : db.expenses.find(x => x.id === id);
+  if (!e) return `<div class="empty">Expense not found. <a href="#/sessions">Back</a></div>`;
+  return `
+    <header class="appbar">
+      <a class="iconbtn" href="#/sessions" aria-label="Back">${icon('back')}</a>
+      <h1>${isNew ? 'New expense' : 'Edit expense'}<span class="sub">Not tied to a session</span></h1>
+      ${isNew ? '' : `<button class="iconbtn danger" data-act="delete-expense" data-id="${e.id}" aria-label="Delete expense">${icon('delete')}</button>`}
+    </header>
+    <form class="card" data-form="purchase" data-id="${isNew ? '' : e.id}">
+      <div class="field"><span>Category</span>
+        <div class="cats">
+          ${CATEGORIES.map(([key, label, ic]) => `
+            <label class="cat"><input type="radio" name="category" value="${key}" ${e.category === key ? 'checked' : ''}>${icon(ic)}<span>${label}</span></label>`).join('')}
+        </div>
+      </div>
+      <div class="grid2">
+        <label class="field"><span>Amount (RM)</span><input name="amount" type="number" inputmode="decimal" step="0.01" min="0.01" value="${e.amount}" required placeholder="0.00"></label>
+        <label class="field"><span>Date</span><input name="date" type="date" value="${e.date}" required></label>
+      </div>
+      <label class="field"><span>Note (optional)</span><input name="note" value="${esc(e.note)}" placeholder="e.g. Franklin X-40 × 6" autocomplete="off"></label>
+      <button class="btn primary block">${icon('check')}${isNew ? 'Add expense' : 'Save changes'}</button>
+    </form>`;
+}
+
+const perCourtText = s => { const c = calc(s); return c.perCourt != null ? `${rm(c.perCourt)} per court` : ''; };
+function summaryHtml(s) {
+  const c = calc(s);
+  return `
+    <div class="sum"><span>Paid</span><span>${c.paid} / ${s.attendees.length} players</span></div>
+    <div class="sum"><span>Revenue</span><span>${rm(c.revenue)}</span></div>
+    <div class="sum"><span>Court cost</span><span>-${rm(s.courtCost)}</span></div>
+    <div class="sum"><span>Expenditure</span><span>-${rm(c.expenses)}</span></div>
+    <div class="sum total"><span>Profit / Loss</span><span class="${c.pl < 0 ? 'neg' : 'pos'}">${rm(c.pl)}</span></div>
+    ${c.outstanding ? `<div class="sum small neg"><span>Still to collect</span><span>${rm(c.outstanding)}</span></div>` : ''}`;
 }
 
 function viewSession(id) {
@@ -261,17 +424,10 @@ function viewSession(id) {
         <label class="field"><span>Court cost (RM)</span><input type="number" inputmode="decimal" step="0.01" min="0" data-field="courtCost" value="${s.courtCost}"></label>
         <label class="field"><span>Courts</span><input type="number" inputmode="numeric" step="1" min="0" data-field="courts" value="${s.courts ?? ''}" placeholder="–"></label>
       </div>
-      ${c.perCourt != null ? `<p class="muted small" style="margin:8px 0 0">${rm(c.perCourt)} per court</p>` : ''}
+      <p class="muted small" id="per-court" style="margin:8px 0 0">${perCourtText(s)}</p>
     </section>
 
-    <section class="card">
-      <div class="sum"><span>Paid</span><span>${c.paid} / ${s.attendees.length} players</span></div>
-      <div class="sum"><span>Revenue</span><span>${rm(c.revenue)}</span></div>
-      <div class="sum"><span>Court cost</span><span>-${rm(s.courtCost)}</span></div>
-      <div class="sum"><span>Expenditure</span><span>-${rm(c.expenses)}</span></div>
-      <div class="sum total"><span>Profit / Loss</span><span class="${c.pl < 0 ? 'neg' : 'pos'}">${rm(c.pl)}</span></div>
-      ${c.outstanding ? `<div class="sum small neg"><span>Still to collect</span><span>${rm(c.outstanding)}</span></div>` : ''}
-    </section>
+    <section class="card" id="summary">${summaryHtml(s)}</section>
 
     <section class="card">
       <div class="sec-head">
@@ -389,7 +545,7 @@ function viewBackup() {
       </div>
     </section>
     <section class="card">
-      <p class="small muted" style="margin-top:0">${db.sessions.length} sessions · ${db.players.length} players</p>
+      <p class="small muted" style="margin-top:0">${db.sessions.length} sessions · ${db.expenses.length} expenses · ${db.players.length} players</p>
       <button class="btn" data-act="reset">${icon('delete')}Erase all data</button>
     </section>`;
 }
@@ -409,11 +565,11 @@ function currentSession() {
 function render() {
   pruneSelection();
   const { view, id } = parseHash();
-  const views = { sessions: viewSessions, session: () => viewSession(id), owed: viewOwed, players: viewPlayers, backup: viewBackup };
+  const views = { sessions: viewSessions, session: () => viewSession(id), expense: () => viewExpense(id), owed: viewOwed, players: viewPlayers, backup: viewBackup };
   main.innerHTML = (views[view] || viewSessions)();
   document.body.classList.toggle('has-bar', selected.size > 0);
 
-  const tab = view === 'session' ? 'sessions' : view;
+  const tab = view === 'session' || view === 'expense' ? 'sessions' : view;
   const unpaidCount = dueUnpaidSessions().reduce((t, s) => t + calc(s).unpaid, 0);
   nav.innerHTML = TABS.map(([v, ic, label]) => `
     <a href="#/${v}" class="${v === tab ? 'active' : ''}" ${v === tab ? 'aria-current="page"' : ''}>
@@ -451,8 +607,17 @@ function toCsv() {
   line('Expenditure', s => calc(s).expenses.toFixed(2));
   line('Expenditure items', s => s.expenses.map(e => `${e.name} ${e.amount.toFixed(2)}`).join('; '));
   line('Profit / Loss', s => calc(s).pl.toFixed(2));
+  if (db.expenses.length) {
+    rows.push([]);
+    rows.push(['Expenses', 'Date', 'Category', 'Amount', 'Note']);
+    [...db.expenses].sort((a, b) => a.date.localeCompare(b.date))
+      .forEach(e => rows.push(['', e.date, category(e.category)[1], e.amount.toFixed(2), e.note]));
+  }
+  const l = ledger();
   rows.push([]);
-  rows.push(['Bank', bank().toFixed(2)]);
+  rows.push(['Bank (today)', l.now.toFixed(2)]);
+  rows.push(['Booked ahead', l.upcoming.toFixed(2)]);
+  rows.push(['Projected', l.projected.toFixed(2)]);
   return rows.map(r => r.map(cell).join(',')).join('\r\n');
 }
 
@@ -463,12 +628,14 @@ document.getElementById('import-file').addEventListener('change', async e => {
   try {
     const data = JSON.parse(await file.text());
     if (!Array.isArray(data.players) || !Array.isArray(data.sessions)) throw new Error('Not a tracker backup');
-    if (!confirm(`Replace current data with backup (${data.sessions.length} sessions, ${data.players.length} players)?`)) return;
-    db = data;
+    const ok = await ask({ title: 'Replace current data?', message: `The backup has ${data.sessions.length} sessions and ${data.players.length} players. Your current data will be replaced.`, ok: 'Replace' });
+    if (!ok) return;
+    db = normalize(data);
+    selected.clear();
     commit();
     toast('Backup imported');
   } catch (err) {
-    alert('Import failed: ' + err.message);
+    ask({ title: 'Import failed', message: err.message, cancel: null });
   }
 });
 
@@ -482,8 +649,8 @@ const actions = {
     save();
     location.hash = '#/session/' + s.id;
   },
-  'delete-session'(el, s) {
-    if (!confirm(`Delete session on ${fmtDate(s.date)}?`)) return;
+  async 'delete-session'(el, s) {
+    if (!s || !await ask({ title: 'Delete session?', message: `${fmtDate(s.date)} and its payments will be removed.`, ok: 'Delete' })) return;
     db.sessions = db.sessions.filter(x => x.id !== s.id);
     save();
     location.hash = '#/sessions';
@@ -500,6 +667,19 @@ const actions = {
     render();
   },
   'clear-sel'() { selected.clear(); render(); },
+  'filter'(el) {
+    homeFilter = el.dataset.id;
+    try { localStorage.setItem('pb-home-filter', homeFilter); } catch {}
+    render();
+  },
+  async 'delete-expense'(el) {
+    const e = db.expenses.find(x => x.id === el.dataset.id);
+    if (!e || !await ask({ title: 'Delete expense?', message: `${category(e.category)[1]} · ${rm(e.amount)} on ${fmtDate(e.date)}`, ok: 'Delete' })) return;
+    db.expenses = db.expenses.filter(x => x.id !== e.id);
+    save();
+    location.hash = '#/sessions';
+    toast('Expense deleted');
+  },
   'copy-sel'() { copy(yodaReminder(selectedGroups())); },
   'sel-paid'() {
     const n = selected.size;
@@ -523,21 +703,23 @@ const actions = {
     commit();
   },
   'remove-expense'(el, s) { s.expenses = s.expenses.filter(e => e.id !== el.dataset.id); commit(); },
-  'rename-player'(el) {
+  async 'rename-player'(el) {
     const p = player(el.dataset.id);
-    const name = prompt('Rename player', p.name)?.trim();
+    const name = await ask({ title: 'Rename player', input: p.name, ok: 'Save' });
     if (!name || name === p.name) return;
-    if (db.players.some(x => x.id !== p.id && x.name.toLowerCase() === name.toLowerCase())) return alert('A player with that name already exists.');
+    if (db.players.some(x => x.id !== p.id && x.name.toLowerCase() === name.toLowerCase())) {
+      return ask({ title: 'Name taken', message: `A player called "${name}" already exists.`, cancel: null });
+    }
     p.name = name;
     commit();
   },
-  'delete-player'(el) {
+  async 'delete-player'(el) {
     const id = el.dataset.id;
     const n = playCounts()[id] || 0;
-    const msg = n
-      ? `${pname(id)} is in ${n} session(s). Deleting removes them from those sessions and changes their revenue. Continue?`
-      : `Delete ${pname(id)}?`;
-    if (!confirm(msg)) return;
+    const message = n
+      ? `${pname(id)} is in ${n} session(s). Deleting removes them from those sessions and changes their revenue.`
+      : '';
+    if (!await ask({ title: `Delete ${pname(id)}?`, message, ok: 'Delete' })) return;
     db.players = db.players.filter(p => p.id !== id);
     db.sessions.forEach(s => { s.attendees = s.attendees.filter(a => a.playerId !== id); });
     commit();
@@ -550,10 +732,11 @@ const actions = {
   },
   'import-json'() { document.getElementById('import-file').click(); },
   'export-csv'() { download(`pickleball-${today()}.csv`, toCsv(), 'text/csv'); },
-  'reset'() {
-    if (!confirm('Erase ALL sessions and players? Export a backup first if unsure.')) return;
-    if (prompt('Type ERASE to confirm') !== 'ERASE') return;
-    db = { players: [], sessions: [], lastBackup: null };
+  async 'reset'() {
+    if (!await ask({ title: 'Erase all data?', message: 'All sessions and players will be removed. Export a backup first if unsure.', ok: 'Continue' })) return;
+    const typed = await ask({ title: 'Type ERASE to confirm', input: '', ok: 'Erase' });
+    if (typed !== 'ERASE') { if (typed != null) toast('Not erased — text did not match'); return; }
+    db = { players: [], sessions: [], expenses: [], lastBackup: null };
     selected.clear();
     commit();
   },
@@ -565,15 +748,24 @@ main.addEventListener('click', e => {
   actions[el.dataset.act]?.(el, session(el.dataset.sid) || currentSession());
 });
 
-main.addEventListener('change', e => {
+// Money/court fields update in place while typing (a full re-render would swallow the next tap).
+main.addEventListener('input', e => {
   const field = e.target.dataset.field;
   const s = currentSession();
-  if (!field || !s) return;
+  if (!s || !['fee', 'courtCost', 'courts'].includes(field)) return;
   const v = e.target.value;
-  if (field === 'date') { if (v) s.date = v; }
-  else if (field === 'courts') { const n = parseInt(v, 10); s.courts = n > 0 ? n : null; }
+  if (field === 'courts') { const n = parseInt(v, 10); s.courts = n > 0 ? n : null; }
   else s[field] = Math.max(0, num(v));
-  commit();
+  save();
+  document.getElementById('summary').innerHTML = summaryHtml(s);
+  document.getElementById('per-court').textContent = perCourtText(s);
+});
+
+main.addEventListener('change', e => {
+  const s = currentSession();
+  if (!s || e.target.dataset.field !== 'date') return;
+  if (e.target.value) s.date = e.target.value;
+  commit(); // date affects due/upcoming state, so redraw everything
 });
 
 main.addEventListener('submit', e => {
@@ -581,6 +773,20 @@ main.addEventListener('submit', e => {
   const form = e.target;
   const fd = new FormData(form);
   const s = currentSession();
+
+  if (form.dataset.form === 'purchase') {
+    const amount = num(fd.get('amount'));
+    if (amount <= 0) return toast('Enter an amount');
+    const data = { date: fd.get('date') || today(), category: category(fd.get('category'))[0], amount, note: String(fd.get('note') || '').trim() };
+    const existing = db.expenses.find(x => x.id === form.dataset.id);
+    if (existing) Object.assign(existing, data);
+    else db.expenses.push({ id: uid(), ...data });
+    save();
+    location.hash = '#/sessions';
+    toast(existing ? 'Expense updated' : 'Expense added');
+    return;
+  }
+
   const name = String(fd.get('name') || '').trim();
   if (!name) return;
 
