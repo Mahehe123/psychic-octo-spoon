@@ -292,129 +292,55 @@ async function copy(text, done = 'Copied, the reminder is ✨') {
   catch { ask({ title: 'Copy this message', text, ok: 'Done', cancel: null }); }
 }
 
-// ---------- invitation (3 styles, never the same style twice in a row) ----------
-const shuffle = arr => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+// ---------- invitation (Jedi style) ----------
+// Each opening announces the upcoming game; `d` is "Today", "Tomorrow", "Saturday" or "Saturday 17 Oct".
+const INVITE_OPENINGS = [
+  d => `${d}, a battle on the court there will be.`,
+  d => `Booked, the courts are. ${d}, the dinking begins.`,
+  d => `Summon the padawans, the Council does. ${d}, we play.`,
+  d => `A game approaching, I sense. ${d}, it is.`,
+  d => `Rest your knees now, you should. ${d}, need them you will.`,
+  d => `Gather, the Jedi must. ${d}, train we will.`,
+  d => `Ready your paddle, you must. ${d}, the battle comes.`,
+];
+function gameDay(s) {
+  const days = Math.round((new Date(s.date + 'T00:00:00') - new Date(today() + 'T00:00:00')) / 864e5);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Tomorrow';
+  const weekday = fmtDate(s.date, { weekday: 'long' });
+  return days > 1 && days < 7 ? weekday : `${weekday} ${fmtDate(s.date, { day: 'numeric', month: 'short' })}`;
+}
+const INVITE_CLOSINGS = [
+  'Join the training, you must. Weak, your backhand is. 😏',
+  'Skip this, you will? To the dark side, the couch leads. 🛋️',
+  'Afraid of a plastic ball, a true Jedi is not. 👀',
+  'Reply "in", or a youngling forever you remain. 🍼',
+  'Much to learn, you still have. Start this session, you will. 🏓',
+];
+// Pick a random line, but never the same one as last time.
+const lastPicked = {};
+function pickFresh(key, arr) {
+  const choice = pick(arr.length > 1 ? arr.filter(x => x !== lastPicked[key]) : arr);
+  lastPicked[key] = choice;
+  return choice;
+}
 
-const INVITE_STYLES = {
-  jedi(s, names, when, c) {
-    const seats = c.seats == null ? null
-      : c.seats <= 0 ? '🎟️ Full, the temple is. Waitlist, you join.'
-      : c.seats === 1 ? '🎟️ 1 seat left — the last padawan, will you be?'
-      : `🎟️ ${c.seats} padawan seats left`;
-    return [
-      `🟢 *${pick([
-        'Strong with the paddle, you are not. Yet.',
-        'Trained in the kitchen, a true Jedi is.',
-        'Soft hands, a Jedi has. Soft knees, also. Hmm.',
-        'Your lightsaber, a paddle it now is.',
-        'Fear leads to anger. Anger leads to… missing the dink.',
-        'Summon the padawans, the Council has. Excuses, allowed they are not.',
-      ])}* 🏓`,
-      '',
-      '🧘 *Jedi to be:*',
-      names.length ? names.join(', ') : 'none yet… the chosen one, you could be. 👀',
-      '',
-      s.venue ? `🏛️ Temple: ${s.venue}` : null,
-      `📅 ${when}`,
-      `💰 ${rm(s.fee)} per training session`,
-      lineup(s) ? `👥 ${lineup(s)}` : null,
-      seats,
-      '',
-      pick([
-        'Join the training, you must. Weak, your backhand is. 😏',
-        'Skip this, you will? To the dark side, the couch leads. 🛋️',
-        'Afraid of a plastic ball, a true Jedi is not. 👀',
-        'Reply "in", or a youngling forever you remain. 🍼',
-        'Much to learn, you still have. Start this session, you will. 🏓',
-      ]),
-    ];
-  },
-
-  wisdom(s, names, when, c) {
-    const seats = c.seats == null ? null
-      : c.seats <= 0 ? 'Full, the dojo is. Waitlist only 🙏'
-      : c.seats === 1 ? 'Only 1 seat left for the worthy 🙏'
-      : `${c.seats} seats left for the worthy 🙏`;
-    return [
-      '🧙 *A wise man once said:*',
-      `_"${pick([
-        'Dink your donks, sway left & right.',
-        'He who stays in the kitchen, gets the fault.',
-        'The ball that is lobbed must come down. Usually on your head.',
-        'A dink a day keeps the physio away.',
-        'Man who skips pickleball, sleeps with regret.',
-        'Soft hands, strong knees, empty wallet.',
-        'Only the patient dink wins the war.',
-        'He who smashes first, apologises later.',
-        'Step not into the kitchen, unless invited by the ball.',
-      ])}"_`,
-      '',
-      pick([
-        'Nobody knows what it means. But it sounds deep. 🏓',
-        'Scholars still debating. Paddles still swinging. 🏓',
-        'Deep, it is. Understand it, nobody does. 🏓',
-        'Written on an ancient paddle, this was found. 🏓',
-      ]),
-      '',
-      `📅 ${when}`,
-      [s.venue && `📍 ${s.venue}`, `💰 ${rm(s.fee)}`].filter(Boolean).join(' · '),
-      lineup(s) ? `👥 ${lineup(s)}` : null,
-      '',
-      names.length ? `Already enlightened: ${names.join(', ')}` : 'Nobody enlightened yet. Be the first. 🙏',
-      seats,
-    ];
-  },
-
-  wild(s, names, when, c) {
-    const moves = shuffle([
-      ['DINK', "It's super effective!"],
-      ['LOB', 'The crowd goes wild!'],
-      ['ERNE', 'Nobody knows how.'],
-      ['SMASH', 'Critical hit!'],
-      ['DROP SHOT', 'The opponent is confused!'],
-      ['SPEED UP', 'It missed… but it looked cool.'],
-      ['KITCHEN STEP', 'Foot fault! It hurt itself.'],
-      ['THIRD SHOT DROP', 'Textbook. Coach is proud.'],
-      ['BANANA SNACK', 'HP fully restored! 🍌'],
-      ['WARM UP', 'Still warming up… 20 minutes later.'],
-      ['ATP', 'Around the post! Legendary!'],
-      ['TRASH TALK', "The opponent's defence fell!"],
-    ]);
-    const shown = names.slice(0, 6);
-    const party = names.length
-      ? [
-        ...shown.map((n, i) => `${n} used *${moves[i % moves.length][0]}*! ${moves[i % moves.length][1]}`),
-        names.length > shown.length && `+ ${names.length - shown.length} more trainers joined the party!`,
-      ]
-      : ['Party has 0 members. Be Player 1! 🕹️'];
-    const seats = c.seats == null ? 'Will you *FIGHT* or *RUN*? 🏓'
-      : c.seats <= 0 ? 'Party is full! Join the waitlist, trainer. 🏓'
-      : `${c.seats} slot${c.seats === 1 ? '' : 's'} left in the party. Will you *FIGHT* or *RUN*? 🏓`;
-    return [
-      '🎮 *A wild pickleball session appeared!*',
-      '',
-      ...party,
-      '',
-      `📅 ${when}`,
-      [s.venue && `📍 ${s.venue}`, `💰 ${rm(s.fee)}`].filter(Boolean).join(' · '),
-      lineup(s) ? `👥 ${lineup(s)}` : null,
-      '',
-      seats,
-    ];
-  },
-};
-
-let lastInviteStyle = null;
 function inviteMessage(s) {
-  const style = pick(Object.keys(INVITE_STYLES).filter(k => k !== lastInviteStyle));
-  lastInviteStyle = style;
   const names = s.attendees.map(a => pname(a.playerId));
-  const when = [fmtDate(s.date, { weekday: 'short', day: 'numeric', month: 'short' }), timeRange(s) && `🕗 ${timeRange(s)}`].filter(Boolean).join(' · ');
-  return INVITE_STYLES[style](s, names, when, calc(s))
-    .filter(line => line !== null && line !== false && line !== undefined)
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  const when = [fmtDate(s.date, { weekday: 'short', day: 'numeric', month: 'short' }), timeRange(s)].filter(Boolean).join(' · ');
+  return [
+    `🟢 *${pickFresh('opening', INVITE_OPENINGS)(gameDay(s))}* 🏓`,
+    '',
+    s.venue ? `🏛️ Temple: ${s.venue}` : null,
+    `📅 ${when}`,
+    `💰 ${rm(s.fee)} per padawan`,
+    lineup(s) ? `👥 ${lineup(s)}` : null,
+    '',
+    '🧘 *Jedi to be:*',
+    ...(names.length ? names.map((n, i) => `${i + 1}. ${n}`) : ['none yet… the chosen one, you could be. 👀']),
+    '',
+    pickFresh('closing', INVITE_CLOSINGS),
+  ].filter(line => line !== null).join('\n');
 }
 
 // ---------- shared UI pieces ----------
@@ -628,7 +554,7 @@ function viewSession(id) {
         <h2 class="card-title">Invite</h2>
         <span class="muted small" id="invite-count">${inviteCount(s)}</span>
       </div>
-      <p class="hint">A random style each time: Jedi training, ancient wisdom or wild encounter.</p>
+      <p class="hint">Jedi-style invite with everyone who’s in. Opening and closing lines change each time.</p>
       <button class="btn primary block" data-act="copy-invite" data-sid="${s.id}">${icon('copy')}Copy invite</button>
     </section>
     ${actionBar()}`;
