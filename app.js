@@ -99,7 +99,7 @@ function seed() {
   const names = ['Chris', 'Liz', 'Dean', 'Makoto', 'Hitomi', 'Toshi', 'Chia Yi', 'Jk', 'Adel', 'Hafiz', 'Ser Lyn', 'Soo', 'JH', 'Mira', 'Megat', 'JJ'];
   const players = names.map(name => ({ id: uid(), name }));
   const everyone = paid => players.map(p => ({ playerId: p.id, paid }));
-  const s = (date, courtCost, attendees) => ({ id: uid(), date, startTime: '', hours: null, venue: '', fee: 20, courtCost, courts: null, attendees });
+  const s = (date, courtCost, attendees) => ({ id: uid(), date, startTime: '', hours: null, venue: '', fee: 20, courtCost, courts: null, maxPlayers: null, attendees });
   const e = (date, amount) => ({ id: uid(), date, category: 'other', amount, note: 'Expenditure' });
   return {
     players,
@@ -135,6 +135,7 @@ function normalize(d) {
       fee: Math.max(0, num(s.fee)),
       courtCost: Math.max(0, num(s.courtCost)),
       courts: parseInt(s.courts, 10) > 0 ? parseInt(s.courts, 10) : null,
+      maxPlayers: parseInt(s.maxPlayers, 10) > 0 ? parseInt(s.maxPlayers, 10) : null,
       attendees: (Array.isArray(s.attendees) ? s.attendees : [])
         .map(a => ({ playerId: cleanId(a?.playerId), paid: !!a?.paid }))
         .filter((a, i, arr) => ids.has(a.playerId) && arr.findIndex(x => x.playerId === a.playerId) === i),
@@ -189,8 +190,25 @@ function calc(s) {
     pl: r2(revenue - s.courtCost),
     outstanding: r2(unpaid * s.fee),
     perCourt: s.courts ? r2(s.courtCost / s.courts) : null,
-    seats: s.courts ? s.courts * 4 - s.attendees.length : null, // 4 players per court
+    seats: capacity(s) == null ? null : capacity(s) - s.attendees.length,
   };
+}
+
+// Planned player count; falls back to 4 per court when not entered.
+const capacity = s => s.maxPlayers ?? (s.courts ? s.courts * 4 : null);
+// "6" or "6–7" players per court, or '' if unknown
+function perCourtPlayers(s) {
+  const cap = capacity(s);
+  if (!cap || !s.courts) return '';
+  const lo = Math.floor(cap / s.courts), hi = Math.ceil(cap / s.courts);
+  return lo === hi ? `${lo}` : `${lo}–${hi}`;
+}
+// "12 players · 6 per court", "12 players", "2 courts" or ''
+function lineup(s) {
+  const courts = s.courts ? `${s.courts} court${s.courts === 1 ? '' : 's'}` : '';
+  if (!s.maxPlayers) return courts;
+  const pp = perCourtPlayers(s);
+  return [`${s.maxPlayers} players`, pp && `${pp} per court`, courts].filter(Boolean).join(' · ');
 }
 
 // "8:00 PM – 10:00 PM", "8:00 PM", "2 hours" or ''
@@ -299,6 +317,7 @@ const INVITE_STYLES = {
       s.venue ? `🏛️ Temple: ${s.venue}` : null,
       `📅 ${when}`,
       `💰 ${rm(s.fee)} per training session`,
+      lineup(s) ? `👥 ${lineup(s)}` : null,
       seats,
       '',
       pick([
@@ -339,6 +358,7 @@ const INVITE_STYLES = {
       '',
       `📅 ${when}`,
       [s.venue && `📍 ${s.venue}`, `💰 ${rm(s.fee)}`].filter(Boolean).join(' · '),
+      lineup(s) ? `👥 ${lineup(s)}` : null,
       '',
       names.length ? `Already enlightened: ${names.join(', ')}` : 'Nobody enlightened yet. Be the first. 🙏',
       seats,
@@ -377,6 +397,7 @@ const INVITE_STYLES = {
       '',
       `📅 ${when}`,
       [s.venue && `📍 ${s.venue}`, `💰 ${rm(s.fee)}`].filter(Boolean).join(' · '),
+      lineup(s) ? `👥 ${lineup(s)}` : null,
       '',
       seats,
     ];
@@ -533,7 +554,10 @@ function viewExpense(id) {
     </form>`;
 }
 
-const perCourtText = s => { const c = calc(s); return c.perCourt != null ? `${rm(c.perCourt)} per court` : ''; };
+function perCourtText(s) {
+  const c = calc(s), pp = perCourtPlayers(s);
+  return [c.perCourt != null && `${rm(c.perCourt)} per court`, pp && `${pp} players per court`].filter(Boolean).join(' · ');
+}
 function summaryHtml(s) {
   const c = calc(s);
   return `
@@ -568,10 +592,11 @@ function viewSession(id) {
       <p class="muted small" id="time-range" style="margin:-4px 0 10px">${timeRange(s)}</p>
       <label class="field"><span>Venue (optional)</span><input data-field="venue" value="${esc(s.venue)}" list="venues" placeholder="e.g. Picklers Arena" autocomplete="off"></label>
       <datalist id="venues">${pastVenues().map(v => `<option value="${esc(v)}">`).join('')}</datalist>
-      <div class="grid3">
+      <div class="grid4">
         <label class="field"><span>Per pax (RM)</span><input type="number" inputmode="decimal" step="0.01" min="0" data-field="fee" value="${s.fee}"></label>
         <label class="field"><span>Court cost (RM)</span><input type="number" inputmode="decimal" step="0.01" min="0" data-field="courtCost" value="${s.courtCost}"></label>
         <label class="field"><span>Courts</span><input type="number" inputmode="numeric" step="1" min="0" data-field="courts" value="${s.courts ?? ''}" placeholder="–"></label>
+        <label class="field"><span>Players</span><input type="number" inputmode="numeric" step="1" min="0" data-field="maxPlayers" value="${s.maxPlayers ?? ''}" placeholder="${s.courts ? s.courts * 4 : '–'}"></label>
       </div>
       <p class="muted small" id="per-court" style="margin:8px 0 0">${perCourtText(s)}</p>
     </section>
@@ -601,12 +626,17 @@ function viewSession(id) {
     <section class="card">
       <div class="sec-head">
         <h2 class="card-title">Invite</h2>
-        <span class="muted small">${s.attendees.length} in${c.seats != null ? ` · ${Math.max(0, c.seats)} seat${c.seats === 1 ? '' : 's'} left` : ''}</span>
+        <span class="muted small" id="invite-count">${inviteCount(s)}</span>
       </div>
       <p class="hint">A random style each time: Jedi training, ancient wisdom or wild encounter.</p>
       <button class="btn primary block" data-act="copy-invite" data-sid="${s.id}">${icon('copy')}Copy invite</button>
     </section>
     ${actionBar()}`;
+}
+
+function inviteCount(s) {
+  const c = calc(s);
+  return `${s.attendees.length} in${c.seats != null ? ` · ${Math.max(0, c.seats)} seat${c.seats === 1 ? '' : 's'} left` : ''}`;
 }
 
 // Add-player suggestions: top 10 most active by default, live matches while searching.
@@ -717,6 +747,7 @@ function viewBackup() {
     <header class="appbar"><h1>Backup<span class="sub">Last backup: ${db.lastBackup ? fmtDate(db.lastBackup) : 'never'}</span></h1></header>
     <section class="card">
       <p class="muted" style="margin-top:0">Your data is saved only on this phone. Clearing Chrome's site data or uninstalling the app erases it — export a backup regularly (e.g. to Google Drive).</p>
+      <p class="small muted">Always saved as <b>pickleball-backup.json</b>. On a computer, later exports replace that same file. On Android, Chrome may add “(1)” if an older copy is still in Downloads — delete old copies to keep one.</p>
       <div class="btn-row">
         <button class="btn primary block" data-act="export-json">${icon('download')}Export backup</button>
       </div>
@@ -767,6 +798,49 @@ window.addEventListener('hashchange', () => {
 });
 
 // ---------- files ----------
+// Backup always uses one file name. Where the browser supports the File System Access API
+// (desktop Chrome/Edge), the chosen file handle is remembered so later exports overwrite it.
+// Android Chrome has no such API; there it's a normal download with the same fixed name.
+const BACKUP_NAME = 'pickleball-backup.json';
+function handleStore(mode, fn) {
+  return new Promise((resolve, reject) => {
+    const open = indexedDB.open('pickleball-files', 1);
+    open.onupgradeneeded = () => open.result.createObjectStore('kv');
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const req = fn(open.result.transaction('kv', mode).objectStore('kv'));
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    };
+  });
+}
+const getBackupHandle = () => handleStore('readonly', st => st.get('backup')).catch(() => null);
+const setBackupHandle = h => handleStore('readwrite', st => h ? st.put(h, 'backup') : st.delete('backup')).catch(() => {});
+
+// Returns a toast message, or null if the user cancelled.
+async function saveBackup(text) {
+  if (window.showSaveFilePicker) {
+    try {
+      let handle = await getBackupHandle();
+      if (handle && await handle.requestPermission({ mode: 'readwrite' }) !== 'granted') handle = null;
+      const reused = !!handle;
+      if (!handle) {
+        handle = await showSaveFilePicker({ suggestedName: BACKUP_NAME, types: [{ description: 'Pickleball backup', accept: { 'application/json': ['.json'] } }] });
+        await setBackupHandle(handle);
+      }
+      const w = await handle.createWritable();
+      await w.write(text);
+      await w.close();
+      return reused ? `Backup replaced: ${handle.name}` : `Backup saved: ${handle.name}`;
+    } catch (e) {
+      if (e.name === 'AbortError') return null;
+      await setBackupHandle(null); // file moved/deleted: forget it, fall back to download
+    }
+  }
+  download(BACKUP_NAME, text, 'application/json');
+  return 'Backup downloaded';
+}
+
 function download(name, text, type) {
   const url = URL.createObjectURL(new Blob([text], { type }));
   const a = document.createElement('a');
@@ -792,6 +866,7 @@ function toCsv() {
   line('Venue', s => s.venue);
   line('Court cost', s => s.courtCost.toFixed(2));
   line('Courts', s => s.courts ?? '');
+  line('Players (planned)', s => s.maxPlayers ?? '');
   line('Per pax', s => s.fee.toFixed(2));
   line('Revenue', s => calc(s).revenue.toFixed(2));
   line('Profit / Loss', s => calc(s).pl.toFixed(2));
@@ -835,7 +910,7 @@ const actions = {
     const s = {
       id: uid(), date: today(),
       startTime: last?.startTime ?? '', hours: last?.hours ?? null, venue: last?.venue ?? '',
-      fee: last?.fee ?? 20, courtCost: last?.courtCost ?? 0, courts: last?.courts ?? null, attendees: [],
+      fee: last?.fee ?? 20, courtCost: last?.courtCost ?? 0, courts: last?.courts ?? null, maxPlayers: last?.maxPlayers ?? null, attendees: [],
     };
     db.sessions.push(s);
     save();
@@ -938,11 +1013,14 @@ const actions = {
     db.sessions.forEach(s => { s.attendees = s.attendees.filter(a => a.playerId !== id); });
     commit();
   },
-  'export-json'() {
+  async 'export-json'() {
+    const prev = db.lastBackup;
     db.lastBackup = today();
+    const done = await saveBackup(JSON.stringify(db, null, 2));
+    if (!done) { db.lastBackup = prev; return; }
     save();
-    download(`pickleball-backup-${today()}.json`, JSON.stringify(db, null, 2), 'application/json');
     render();
+    toast(done);
   },
   'import-json'() { document.getElementById('import-file').click(); },
   'export-csv'() { download(`pickleball-${today()}.csv`, toCsv(), 'text/csv'); },
@@ -972,9 +1050,9 @@ main.addEventListener('input', e => {
     return;
   }
   const field = e.target.dataset.field;
-  if (!['fee', 'courtCost', 'courts', 'startTime', 'hours', 'venue'].includes(field)) return;
+  if (!['fee', 'courtCost', 'courts', 'maxPlayers', 'startTime', 'hours', 'venue'].includes(field)) return;
   const v = e.target.value;
-  if (field === 'courts') { const n = parseInt(v, 10); s.courts = n > 0 ? n : null; }
+  if (field === 'courts' || field === 'maxPlayers') { const n = parseInt(v, 10); s[field] = n > 0 ? n : null; }
   else if (field === 'hours') s.hours = num(v) > 0 ? num(v) : null;
   else if (field === 'startTime') s.startTime = /^\d{2}:\d{2}$/.test(v) ? v : '';
   else if (field === 'venue') s.venue = v.trim();
@@ -983,6 +1061,9 @@ main.addEventListener('input', e => {
   document.getElementById('summary').innerHTML = summaryHtml(s);
   document.getElementById('per-court').textContent = perCourtText(s);
   document.getElementById('time-range').textContent = timeRange(s);
+  document.getElementById('invite-count').textContent = inviteCount(s);
+  const mp = document.querySelector('[data-field=maxPlayers]');
+  if (mp) mp.placeholder = s.courts ? s.courts * 4 : '–';
 });
 
 main.addEventListener('change', e => {
