@@ -102,6 +102,12 @@ input { font: inherit; color: inherit; background: var(--card); border: 1px soli
 input:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-color: transparent; }
 .grid3 { display: grid; grid-template-columns: 1fr 1fr .75fr; gap: 8px; }
 .grid3 .field { margin: 0; }
+.grid-when { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.1fr) minmax(0, .65fr); gap: 6px; }
+.grid-when .field { min-width: 0; }
+.grid-when input { padding: 10px 6px; font-size: 14px; }
+.grid-when input::-webkit-calendar-picker-indicator { margin-left: 0; padding: 0; }
+#time-range:empty { display: none; }
+#suggest .btn.tonal { margin-top: 4px; }
 .inline { display: flex; gap: 8px; margin-top: 12px; }
 .inline .amt-in { max-width: 100px; }
 .inline .btn { min-height: 48px; border-radius: 12px; }

@@ -99,16 +99,17 @@ function seed() {
   const names = ['Chris', 'Liz', 'Dean', 'Makoto', 'Hitomi', 'Toshi', 'Chia Yi', 'Jk', 'Adel', 'Hafiz', 'Ser Lyn', 'Soo', 'JH', 'Mira', 'Megat', 'JJ'];
   const players = names.map(name => ({ id: uid(), name }));
   const everyone = paid => players.map(p => ({ playerId: p.id, paid }));
-  const s = (date, courtCost, expenses, attendees) => ({ id: uid(), date, fee: 20, courtCost, courts: null, expenses, attendees });
+  const s = (date, courtCost, attendees) => ({ id: uid(), date, startTime: '', hours: null, venue: '', fee: 20, courtCost, courts: null, attendees });
+  const e = (date, amount) => ({ id: uid(), date, category: 'other', amount, note: 'Expenditure' });
   return {
     players,
     sessions: [
-      s('2026-09-05', 202.5, [{ id: uid(), name: 'Expenditure', amount: 110 }], everyone(true)),
-      s('2026-09-12', 202.5, [{ id: uid(), name: 'Expenditure', amount: 23 }], everyone(true)),
-      s('2026-09-16', 75, [], []),
-      s('2026-09-19', 75, [], []),
+      s('2026-09-05', 202.5, everyone(true)),
+      s('2026-09-12', 202.5, everyone(true)),
+      s('2026-09-16', 75, []),
+      s('2026-09-19', 75, []),
     ],
-    expenses: [],
+    expenses: [e('2026-09-05', 110), e('2026-09-12', 23)],
     lastBackup: null,
   };
 }
@@ -118,23 +119,29 @@ const cleanId = id => String(id ?? '').replace(/[^\w-]/g, '') || uid();
 function normalize(d) {
   const players = d.players.filter(p => p && p.name).map(p => ({ id: cleanId(p.id), name: String(p.name).trim() }));
   const ids = new Set(players.map(p => p.id));
+  const validDate = v => /^\d{4}-\d{2}-\d{2}$/.test(v);
+  const sessions = d.sessions.filter(Boolean).map(s => ({ ...s, date: validDate(s.date) ? s.date : today() }));
+  // Older versions kept expenditure inside sessions; move it to general expenses (category Other).
+  const migrated = sessions.flatMap(s => (Array.isArray(s.expenses) ? s.expenses : []).filter(Boolean)
+    .map(e => ({ id: e.id, date: s.date, category: 'other', amount: e.amount, note: e.name })));
   return {
     players,
-    sessions: d.sessions.filter(Boolean).map(s => ({
+    sessions: sessions.map(s => ({
       id: cleanId(s.id),
-      date: /^\d{4}-\d{2}-\d{2}$/.test(s.date) ? s.date : today(),
+      date: s.date,
+      startTime: /^\d{2}:\d{2}$/.test(s.startTime) ? s.startTime : '',
+      hours: num(s.hours) > 0 ? num(s.hours) : null,
+      venue: String(s.venue ?? '').trim(),
       fee: Math.max(0, num(s.fee)),
       courtCost: Math.max(0, num(s.courtCost)),
       courts: parseInt(s.courts, 10) > 0 ? parseInt(s.courts, 10) : null,
-      expenses: (Array.isArray(s.expenses) ? s.expenses : []).filter(Boolean)
-        .map(e => ({ id: cleanId(e.id), name: String(e.name ?? ''), amount: Math.max(0, num(e.amount)) })),
       attendees: (Array.isArray(s.attendees) ? s.attendees : [])
         .map(a => ({ playerId: cleanId(a?.playerId), paid: !!a?.paid }))
         .filter((a, i, arr) => ids.has(a.playerId) && arr.findIndex(x => x.playerId === a.playerId) === i),
     })),
-    expenses: (Array.isArray(d.expenses) ? d.expenses : []).filter(Boolean).map(e => ({
+    expenses: [...(Array.isArray(d.expenses) ? d.expenses : []), ...migrated].filter(Boolean).map(e => ({
       id: cleanId(e.id),
-      date: /^\d{4}-\d{2}-\d{2}$/.test(e.date) ? e.date : today(),
+      date: validDate(e.date) ? e.date : today(),
       category: category(e.category)[0],
       amount: Math.max(0, num(e.amount)),
       note: String(e.note ?? ''),
@@ -146,7 +153,11 @@ function normalize(d) {
 function load() {
   try {
     const d = JSON.parse(localStorage.getItem(KEY));
-    if (d && Array.isArray(d.sessions) && Array.isArray(d.players)) return normalize(d);
+    if (d && Array.isArray(d.sessions) && Array.isArray(d.players)) {
+      const clean = normalize(d);
+      localStorage.setItem(KEY, JSON.stringify(clean)); // persist any migration
+      return clean;
+    }
   } catch {}
   const d = seed();
   localStorage.setItem(KEY, JSON.stringify(d));
@@ -173,14 +184,28 @@ function calc(s) {
   const paid = s.attendees.filter(a => a.paid).length;
   const unpaid = isDue(s) ? s.attendees.length - paid : 0;
   const revenue = r2(paid * s.fee);
-  const expenses = r2(s.expenses.reduce((t, e) => t + e.amount, 0));
   return {
-    paid, unpaid, revenue, expenses,
-    pl: r2(revenue - s.courtCost - expenses),
+    paid, unpaid, revenue,
+    pl: r2(revenue - s.courtCost),
     outstanding: r2(unpaid * s.fee),
     perCourt: s.courts ? r2(s.courtCost / s.courts) : null,
+    seats: s.courts ? s.courts * 4 - s.attendees.length : null, // 4 players per court
   };
 }
+
+// "8:00 PM – 10:00 PM", "8:00 PM", "2 hours" or ''
+function timeRange(s) {
+  const fmt = mins => {
+    const h = Math.floor(mins / 60) % 24, m = mins % 60;
+    return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+  };
+  const hrs = s.hours ? `${s.hours} hour${s.hours === 1 ? '' : 's'}` : '';
+  if (!s.startTime) return hrs;
+  const [h, m] = s.startTime.split(':').map(Number);
+  const start = h * 60 + m;
+  return s.hours ? `${fmt(start)} – ${fmt(start + Math.round(s.hours * 60))}` : fmt(start);
+}
+const pastVenues = () => [...new Set(sorted().map(s => s.venue).filter(Boolean))];
 // Balance by date: sessions/expenses up to today count now; later ones are "booked ahead".
 function ledger() {
   const t = today();
@@ -244,9 +269,131 @@ function yodaReminder(groups) {
     `Small, the amount is. Big, the gratitude will be. 🙏\n\n${details}\n\n${who} — do or do not pay. There is no "later". 🏓`,
   ]);
 }
-async function copy(text) {
-  try { await navigator.clipboard.writeText(text); toast('Copied, the reminder is ✨'); }
+async function copy(text, done = 'Copied, the reminder is ✨') {
+  try { await navigator.clipboard.writeText(text); toast(done); }
   catch { ask({ title: 'Copy this message', text, ok: 'Done', cancel: null }); }
+}
+
+// ---------- invitation (3 styles, never the same style twice in a row) ----------
+const shuffle = arr => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+const INVITE_STYLES = {
+  jedi(s, names, when, c) {
+    const seats = c.seats == null ? null
+      : c.seats <= 0 ? '🎟️ Full, the temple is. Waitlist, you join.'
+      : c.seats === 1 ? '🎟️ 1 seat left — the last padawan, will you be?'
+      : `🎟️ ${c.seats} padawan seats left`;
+    return [
+      `🟢 *${pick([
+        'Strong with the paddle, you are not. Yet.',
+        'Trained in the kitchen, a true Jedi is.',
+        'Soft hands, a Jedi has. Soft knees, also. Hmm.',
+        'Your lightsaber, a paddle it now is.',
+        'Fear leads to anger. Anger leads to… missing the dink.',
+        'Summon the padawans, the Council has. Excuses, allowed they are not.',
+      ])}* 🏓`,
+      '',
+      '🧘 *Jedi to be:*',
+      names.length ? names.join(', ') : 'none yet… the chosen one, you could be. 👀',
+      '',
+      s.venue ? `🏛️ Temple: ${s.venue}` : null,
+      `📅 ${when}`,
+      `💰 ${rm(s.fee)} per training session`,
+      seats,
+      '',
+      pick([
+        'Join the training, you must. Weak, your backhand is. 😏',
+        'Skip this, you will? To the dark side, the couch leads. 🛋️',
+        'Afraid of a plastic ball, a true Jedi is not. 👀',
+        'Reply "in", or a youngling forever you remain. 🍼',
+        'Much to learn, you still have. Start this session, you will. 🏓',
+      ]),
+    ];
+  },
+
+  wisdom(s, names, when, c) {
+    const seats = c.seats == null ? null
+      : c.seats <= 0 ? 'Full, the dojo is. Waitlist only 🙏'
+      : c.seats === 1 ? 'Only 1 seat left for the worthy 🙏'
+      : `${c.seats} seats left for the worthy 🙏`;
+    return [
+      '🧙 *A wise man once said:*',
+      `_"${pick([
+        'Dink your donks, sway left & right.',
+        'He who stays in the kitchen, gets the fault.',
+        'The ball that is lobbed must come down. Usually on your head.',
+        'A dink a day keeps the physio away.',
+        'Man who skips pickleball, sleeps with regret.',
+        'Soft hands, strong knees, empty wallet.',
+        'Only the patient dink wins the war.',
+        'He who smashes first, apologises later.',
+        'Step not into the kitchen, unless invited by the ball.',
+      ])}"_`,
+      '',
+      pick([
+        'Nobody knows what it means. But it sounds deep. 🏓',
+        'Scholars still debating. Paddles still swinging. 🏓',
+        'Deep, it is. Understand it, nobody does. 🏓',
+        'Written on an ancient paddle, this was found. 🏓',
+      ]),
+      '',
+      `📅 ${when}`,
+      [s.venue && `📍 ${s.venue}`, `💰 ${rm(s.fee)}`].filter(Boolean).join(' · '),
+      '',
+      names.length ? `Already enlightened: ${names.join(', ')}` : 'Nobody enlightened yet. Be the first. 🙏',
+      seats,
+    ];
+  },
+
+  wild(s, names, when, c) {
+    const moves = shuffle([
+      ['DINK', "It's super effective!"],
+      ['LOB', 'The crowd goes wild!'],
+      ['ERNE', 'Nobody knows how.'],
+      ['SMASH', 'Critical hit!'],
+      ['DROP SHOT', 'The opponent is confused!'],
+      ['SPEED UP', 'It missed… but it looked cool.'],
+      ['KITCHEN STEP', 'Foot fault! It hurt itself.'],
+      ['THIRD SHOT DROP', 'Textbook. Coach is proud.'],
+      ['BANANA SNACK', 'HP fully restored! 🍌'],
+      ['WARM UP', 'Still warming up… 20 minutes later.'],
+      ['ATP', 'Around the post! Legendary!'],
+      ['TRASH TALK', "The opponent's defence fell!"],
+    ]);
+    const shown = names.slice(0, 6);
+    const party = names.length
+      ? [
+        ...shown.map((n, i) => `${n} used *${moves[i % moves.length][0]}*! ${moves[i % moves.length][1]}`),
+        names.length > shown.length && `+ ${names.length - shown.length} more trainers joined the party!`,
+      ]
+      : ['Party has 0 members. Be Player 1! 🕹️'];
+    const seats = c.seats == null ? 'Will you *FIGHT* or *RUN*? 🏓'
+      : c.seats <= 0 ? 'Party is full! Join the waitlist, trainer. 🏓'
+      : `${c.seats} slot${c.seats === 1 ? '' : 's'} left in the party. Will you *FIGHT* or *RUN*? 🏓`;
+    return [
+      '🎮 *A wild pickleball session appeared!*',
+      '',
+      ...party,
+      '',
+      `📅 ${when}`,
+      [s.venue && `📍 ${s.venue}`, `💰 ${rm(s.fee)}`].filter(Boolean).join(' · '),
+      '',
+      seats,
+    ];
+  },
+};
+
+let lastInviteStyle = null;
+function inviteMessage(s) {
+  const style = pick(Object.keys(INVITE_STYLES).filter(k => k !== lastInviteStyle));
+  lastInviteStyle = style;
+  const names = s.attendees.map(a => pname(a.playerId));
+  const when = [fmtDate(s.date, { weekday: 'short', day: 'numeric', month: 'short' }), timeRange(s) && `🕗 ${timeRange(s)}`].filter(Boolean).join(' · ');
+  return INVITE_STYLES[style](s, names, when, calc(s))
+    .filter(line => line !== null && line !== false && line !== undefined)
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 // ---------- shared UI pieces ----------
@@ -393,7 +540,6 @@ function summaryHtml(s) {
     <div class="sum"><span>Paid</span><span>${c.paid} / ${s.attendees.length} players</span></div>
     <div class="sum"><span>Revenue</span><span>${rm(c.revenue)}</span></div>
     <div class="sum"><span>Court cost</span><span>-${rm(s.courtCost)}</span></div>
-    <div class="sum"><span>Expenditure</span><span>-${rm(c.expenses)}</span></div>
     <div class="sum total"><span>Profit / Loss</span><span class="${c.pl < 0 ? 'neg' : 'pos'}">${rm(c.pl)}</span></div>
     ${c.outstanding ? `<div class="sum small neg"><span>Still to collect</span><span>${rm(c.outstanding)}</span></div>` : ''}`;
 }
@@ -402,11 +548,7 @@ function viewSession(id) {
   const s = session(id);
   if (!s) return `<div class="empty">Session not found. <a href="#/sessions">Back</a></div>`;
   const c = calc(s);
-  const counts = playCounts();
   const inIds = new Set(s.attendees.map(a => a.playerId));
-  const suggestions = db.players
-    .filter(p => !inIds.has(p.id))
-    .sort((a, b) => (counts[b.id] || 0) - (counts[a.id] || 0) || a.name.localeCompare(b.name));
   const others = sorted().filter(x => x.id !== s.id && x.attendees.some(a => !inIds.has(a.playerId)));
   const prev = others.find(x => x.date <= s.date) || others[0];
 
@@ -418,7 +560,14 @@ function viewSession(id) {
     </header>
 
     <section class="card">
-      <label class="field"><span>Date</span><input type="date" data-field="date" value="${s.date}"></label>
+      <div class="grid-when">
+        <label class="field"><span>Date</span><input type="date" data-field="date" value="${s.date}"></label>
+        <label class="field"><span>Start</span><input type="time" data-field="startTime" value="${s.startTime}"></label>
+        <label class="field"><span>Hours</span><input type="number" inputmode="decimal" step="0.5" min="0" data-field="hours" value="${s.hours ?? ''}" placeholder="–"></label>
+      </div>
+      <p class="muted small" id="time-range" style="margin:-4px 0 10px">${timeRange(s)}</p>
+      <label class="field"><span>Venue (optional)</span><input data-field="venue" value="${esc(s.venue)}" list="venues" placeholder="e.g. Picklers Arena" autocomplete="off"></label>
+      <datalist id="venues">${pastVenues().map(v => `<option value="${esc(v)}">`).join('')}</datalist>
       <div class="grid3">
         <label class="field"><span>Per pax (RM)</span><input type="number" inputmode="decimal" step="0.01" min="0" data-field="fee" value="${s.fee}"></label>
         <label class="field"><span>Court cost (RM)</span><input type="number" inputmode="decimal" step="0.01" min="0" data-field="courtCost" value="${s.courtCost}"></label>
@@ -442,32 +591,50 @@ function viewSession(id) {
 
       <div class="label">Add players</div>
       ${prev ? `<button class="btn tonal" data-act="add-prev" data-sid="${s.id}" data-id="${prev.id}">${icon('history')}Everyone from ${shortDate(prev.date)}</button>` : ''}
-      <div class="chips">
-        ${suggestions.map(p => `<button class="chip" data-act="add-attendee" data-sid="${s.id}" data-id="${p.id}">${icon('add')}${esc(p.name)}</button>`).join('')}
-      </div>
-      <form class="inline" data-form="new-player">
-        <input name="name" placeholder="New player name" autocomplete="off" required aria-label="New player name">
+      <form class="inline" data-form="session-player">
+        <input id="player-search" name="name" value="${esc(playerQuery)}" placeholder="Search or add a player" autocomplete="off" aria-label="Search or add a player">
         <button class="btn primary" aria-label="Add player">${icon('personAdd')}</button>
       </form>
+      <div id="suggest">${suggestHtml(s)}</div>
     </section>
 
     <section class="card">
-      <h2 class="card-title">Expenditure</h2>
-      <ul class="plist">
-        ${s.expenses.map(e => `
-          <li class="erow">
-            <span class="name">${esc(e.name)}</span>
-            <span class="amt">${rm(e.amount)}</span>
-            <button class="iconbtn" data-act="remove-expense" data-sid="${s.id}" data-id="${e.id}" aria-label="Remove ${esc(e.name)}">${icon('close')}</button>
-          </li>`).join('') || '<li class="muted small" style="padding:8px 0">None</li>'}
-      </ul>
-      <form class="inline" data-form="expense">
-        <input name="name" placeholder="What? (e.g. Balls)" autocomplete="off" required aria-label="Expense item">
-        <input name="amount" class="amt-in" type="number" inputmode="decimal" step="0.01" min="0" placeholder="RM" required aria-label="Amount">
-        <button class="btn primary" aria-label="Add expense">${icon('add')}</button>
-      </form>
+      <div class="sec-head">
+        <h2 class="card-title">Invite</h2>
+        <span class="muted small">${s.attendees.length} in${c.seats != null ? ` · ${Math.max(0, c.seats)} seat${c.seats === 1 ? '' : 's'} left` : ''}</span>
+      </div>
+      <p class="hint">A random style each time: Jedi training, ancient wisdom or wild encounter.</p>
+      <button class="btn primary block" data-act="copy-invite" data-sid="${s.id}">${icon('copy')}Copy invite</button>
     </section>
     ${actionBar()}`;
+}
+
+// Add-player suggestions: top 10 most active by default, live matches while searching.
+let playerQuery = '';
+let showAllPlayers = false;
+function suggestHtml(s) {
+  const counts = playCounts();
+  const inIds = new Set(s.attendees.map(a => a.playerId));
+  const q = playerQuery.trim().toLowerCase();
+  const pool = db.players
+    .filter(p => !inIds.has(p.id))
+    .sort((a, b) => (counts[b.id] || 0) - (counts[a.id] || 0) || a.name.localeCompare(b.name));
+  const chip = p => `<button class="chip" data-act="add-attendee" data-sid="${s.id}" data-id="${p.id}">${icon('add')}${esc(p.name)}</button>`;
+
+  if (q) {
+    const matches = pool.filter(p => p.name.toLowerCase().includes(q))
+      .sort((a, b) => b.name.toLowerCase().startsWith(q) - a.name.toLowerCase().startsWith(q));
+    const exact = db.players.find(p => p.name.toLowerCase() === q);
+    return `
+      <div class="chips">${matches.map(chip).join('')}</div>
+      ${exact && inIds.has(exact.id) ? `<p class="hint">${esc(exact.name)} is already in this session.</p>` : ''}
+      ${!exact ? `<button class="btn tonal" data-act="add-new" data-sid="${s.id}">${icon('personAdd')}Add “${esc(playerQuery.trim())}” as new player</button>` : ''}`;
+  }
+  const shown = showAllPlayers ? pool : pool.slice(0, 10);
+  return `
+    ${pool.length ? `<div class="hint" style="margin:10px 0 0">${showAllPlayers ? 'All players' : 'Most active'}</div>` : ''}
+    <div class="chips">${shown.map(chip).join('')}</div>
+    ${pool.length > 10 ? `<button class="btn text" data-act="toggle-all-players">${showAllPlayers ? 'Show top 10' : `Show all (${pool.length})`}</button>` : ''}`;
 }
 
 function viewOwed() {
@@ -503,10 +670,20 @@ function viewOwed() {
     ${actionBar()}`;
 }
 
+let playerSort = 'name';
+try { playerSort = localStorage.getItem('pb-player-sort') || 'name'; } catch {}
+
 function viewPlayers() {
   const counts = playCounts();
   const owes = owedByPlayer();
-  const list = [...db.players].sort((a, b) => a.name.localeCompare(b.name));
+  const byName = (a, b) => a.name.localeCompare(b.name);
+  const sorters = {
+    name: byName,
+    sessions: (a, b) => (counts[b.id] || 0) - (counts[a.id] || 0) || byName(a, b),
+    owes: (a, b) => (owes[b.id] || 0) - (owes[a.id] || 0) || byName(a, b),
+  };
+  const list = [...db.players].sort(sorters[playerSort] || byName);
+  const sorts = [['name', 'Name'], ['sessions', 'Sessions'], ['owes', 'Owes']];
   return `
     <header class="appbar"><h1>Players<span class="sub">${db.players.length} people</span></h1></header>
     <section class="card">
@@ -515,6 +692,10 @@ function viewPlayers() {
         <button class="btn primary" aria-label="Add player">${icon('personAdd')}</button>
       </form>
     </section>
+    <div class="chips filters" role="tablist" aria-label="Sort players">
+      <span class="muted small" style="align-self:center">Sort by</span>
+      ${sorts.map(([key, label]) => `<button class="chip ${playerSort === key ? 'on' : ''}" role="tab" aria-selected="${playerSort === key}" data-act="sort-players" data-id="${key}">${playerSort === key ? icon('check') : ''}${label}</button>`).join('')}
+    </div>
     <section class="card">
       <ul class="plist">
         ${list.map(p => `
@@ -577,7 +758,13 @@ function render() {
     </a>`).join('');
 }
 
-window.addEventListener('hashchange', () => { selected.clear(); render(); window.scrollTo(0, 0); });
+window.addEventListener('hashchange', () => {
+  selected.clear();
+  playerQuery = '';
+  showAllPlayers = false;
+  render();
+  window.scrollTo(0, 0);
+});
 
 // ---------- files ----------
 function download(name, text, type) {
@@ -600,12 +787,13 @@ function toCsv() {
   });
   rows.push([]);
   const line = (label, fn) => rows.push([label, ...ss.map(fn)]);
+  line('Start', s => s.startTime);
+  line('Hours', s => s.hours ?? '');
+  line('Venue', s => s.venue);
   line('Court cost', s => s.courtCost.toFixed(2));
   line('Courts', s => s.courts ?? '');
   line('Per pax', s => s.fee.toFixed(2));
   line('Revenue', s => calc(s).revenue.toFixed(2));
-  line('Expenditure', s => calc(s).expenses.toFixed(2));
-  line('Expenditure items', s => s.expenses.map(e => `${e.name} ${e.amount.toFixed(2)}`).join('; '));
   line('Profit / Loss', s => calc(s).pl.toFixed(2));
   if (db.expenses.length) {
     rows.push([]);
@@ -644,7 +832,11 @@ document.getElementById('import-file').addEventListener('change', async e => {
 const actions = {
   'new-session'() {
     const last = sorted()[0];
-    const s = { id: uid(), date: today(), fee: last?.fee ?? 20, courtCost: last?.courtCost ?? 0, courts: last?.courts ?? null, expenses: [], attendees: [] };
+    const s = {
+      id: uid(), date: today(),
+      startTime: last?.startTime ?? '', hours: last?.hours ?? null, venue: last?.venue ?? '',
+      fee: last?.fee ?? 20, courtCost: last?.courtCost ?? 0, courts: last?.courts ?? null, attendees: [],
+    };
     db.sessions.push(s);
     save();
     location.hash = '#/session/' + s.id;
@@ -695,14 +887,36 @@ const actions = {
   'toggle-paid'(el, s) { const a = s.attendees.find(x => x.playerId === el.dataset.id); a.paid = !a.paid; commit(); },
   'all-paid'(el, s) { s.attendees.forEach(a => { a.paid = true; }); commit(); },
   'remove-attendee'(el, s) { s.attendees = s.attendees.filter(a => a.playerId !== el.dataset.id); commit(); },
-  'add-attendee'(el, s) { s.attendees.push({ playerId: el.dataset.id, paid: false }); commit(); },
+  'add-attendee'(el, s) {
+    if (!s.attendees.some(a => a.playerId === el.dataset.id)) s.attendees.push({ playerId: el.dataset.id, paid: false });
+    playerQuery = '';
+    commit();
+  },
+  'add-new'(el, s) {
+    const name = playerQuery.trim();
+    if (!name) return;
+    const p = findOrCreatePlayer(name);
+    if (!s.attendees.some(a => a.playerId === p.id)) s.attendees.push({ playerId: p.id, paid: false });
+    playerQuery = '';
+    commit();
+    toast(`${p.name} added`);
+  },
+  'toggle-all-players'(el, s) {
+    showAllPlayers = !showAllPlayers;
+    document.getElementById('suggest').innerHTML = suggestHtml(s);
+  },
+  'sort-players'(el) {
+    playerSort = el.dataset.id;
+    try { localStorage.setItem('pb-player-sort', playerSort); } catch {}
+    render();
+  },
+  'copy-invite'(el, s) { copy(inviteMessage(s), 'Invite copied — summon them, you must 🏓'); },
   'add-prev'(el, s) {
     session(el.dataset.id).attendees.forEach(a => {
       if (!s.attendees.some(x => x.playerId === a.playerId)) s.attendees.push({ playerId: a.playerId, paid: false });
     });
     commit();
   },
-  'remove-expense'(el, s) { s.expenses = s.expenses.filter(e => e.id !== el.dataset.id); commit(); },
   async 'rename-player'(el) {
     const p = player(el.dataset.id);
     const name = await ask({ title: 'Rename player', input: p.name, ok: 'Save' });
@@ -750,15 +964,25 @@ main.addEventListener('click', e => {
 
 // Money/court fields update in place while typing (a full re-render would swallow the next tap).
 main.addEventListener('input', e => {
-  const field = e.target.dataset.field;
   const s = currentSession();
-  if (!s || !['fee', 'courtCost', 'courts'].includes(field)) return;
+  if (!s) return;
+  if (e.target.id === 'player-search') {
+    playerQuery = e.target.value;
+    document.getElementById('suggest').innerHTML = suggestHtml(s);
+    return;
+  }
+  const field = e.target.dataset.field;
+  if (!['fee', 'courtCost', 'courts', 'startTime', 'hours', 'venue'].includes(field)) return;
   const v = e.target.value;
   if (field === 'courts') { const n = parseInt(v, 10); s.courts = n > 0 ? n : null; }
+  else if (field === 'hours') s.hours = num(v) > 0 ? num(v) : null;
+  else if (field === 'startTime') s.startTime = /^\d{2}:\d{2}$/.test(v) ? v : '';
+  else if (field === 'venue') s.venue = v.trim();
   else s[field] = Math.max(0, num(v));
   save();
   document.getElementById('summary').innerHTML = summaryHtml(s);
   document.getElementById('per-court').textContent = perCourtText(s);
+  document.getElementById('time-range').textContent = timeRange(s);
 });
 
 main.addEventListener('change', e => {
@@ -791,13 +1015,19 @@ main.addEventListener('submit', e => {
   if (!name) return;
 
   if (form.dataset.form === 'new-player') {
-    const p = findOrCreatePlayer(name);
-    if (s && !s.attendees.some(a => a.playerId === p.id)) s.attendees.push({ playerId: p.id, paid: false });
+    findOrCreatePlayer(name);
     commit();
     main.querySelector('[data-form="new-player"] input')?.focus();
-  } else if (form.dataset.form === 'expense' && s) {
-    s.expenses.push({ id: uid(), name, amount: Math.max(0, num(fd.get('amount'))) });
+  } else if (form.dataset.form === 'session-player' && s) {
+    // Enter / add button: exact name -> existing player; single match -> that player; else create new.
+    const q = name.toLowerCase();
+    const inIds = new Set(s.attendees.map(a => a.playerId));
+    const matches = db.players.filter(p => !inIds.has(p.id) && p.name.toLowerCase().includes(q));
+    const p = db.players.find(x => x.name.toLowerCase() === q) || (matches.length === 1 ? matches[0] : findOrCreatePlayer(name));
+    if (!s.attendees.some(a => a.playerId === p.id)) s.attendees.push({ playerId: p.id, paid: false });
+    playerQuery = '';
     commit();
+    document.getElementById('player-search')?.focus();
   }
 });
 
