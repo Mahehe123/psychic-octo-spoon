@@ -99,7 +99,7 @@ function seed() {
   const names = ['Chris', 'Liz', 'Dean', 'Makoto', 'Hitomi', 'Toshi', 'Chia Yi', 'Jk', 'Adel', 'Hafiz', 'Ser Lyn', 'Soo', 'JH', 'Mira', 'Megat', 'JJ'];
   const players = names.map(name => ({ id: uid(), name }));
   const everyone = paid => players.map(p => ({ playerId: p.id, paid }));
-  const s = (date, courtCost, attendees) => ({ id: uid(), date, startTime: '', hours: null, venue: '', fee: 20, courtCost, courts: null, maxPlayers: null, attendees });
+  const s = (date, courtCost, attendees) => ({ id: uid(), date, startTime: '', hours: null, venue: '', courtNo: '', fee: 20, courtCost, courts: null, maxPlayers: null, attendees });
   const e = (date, amount) => ({ id: uid(), date, category: 'other', amount, note: 'Expenditure' });
   return {
     players,
@@ -132,6 +132,7 @@ function normalize(d) {
       startTime: /^\d{2}:\d{2}$/.test(s.startTime) ? s.startTime : '',
       hours: num(s.hours) > 0 ? num(s.hours) : null,
       venue: String(s.venue ?? '').trim(),
+      courtNo: String(s.courtNo ?? '').trim(),
       fee: Math.max(0, num(s.fee)),
       courtCost: Math.max(0, num(s.courtCost)),
       courts: parseInt(s.courts, 10) > 0 ? parseInt(s.courts, 10) : null,
@@ -223,7 +224,25 @@ function timeRange(s) {
   const start = h * 60 + m;
   return s.hours ? `${fmt(start)} – ${fmt(start + Math.round(s.hours * 60))}` : fmt(start);
 }
-const pastVenues = () => [...new Set(sorted().map(s => s.venue).filter(Boolean))];
+// "Court 3 & 4" from whatever was typed; adds "Court" unless the word is already there.
+const courtLabel = s => !s.courtNo ? '' : /court/i.test(s.courtNo) ? s.courtNo : `Court ${s.courtNo}`;
+
+// Venues used before, most used first (ties: most recent first).
+function pastVenues() {
+  const count = new Map();
+  sorted().forEach(s => { if (s.venue) count.set(s.venue, (count.get(s.venue) || 0) + 1); });
+  return [...count.keys()].sort((a, b) => count.get(b) - count.get(a));
+}
+// Tappable venue chips under the Venue box (native <datalist> is unreliable on Android).
+// Hides the venue already in the box; `filter` (while typing) narrows to matching names.
+function venueSuggestHtml(s, filter = '') {
+  const current = s.venue.toLowerCase();
+  const q = filter.trim().toLowerCase();
+  const list = pastVenues()
+    .filter(v => v.toLowerCase() !== current && (!q || v.toLowerCase().includes(q)))
+    .slice(0, 6);
+  return list.map(v => `<button type="button" class="chip" data-act="pick-venue" data-venue="${esc(v)}">${icon('history')}${esc(v)}</button>`).join('');
+}
 // Balance by date: sessions/expenses up to today count now; later ones are "booked ahead".
 function ledger() {
   const t = today();
@@ -326,9 +345,10 @@ function inviteMessage(s) {
     `${opening.icon} *${opening.text(s)}*`,
     '',
     s.venue ? `📍 ${s.venue}` : null,
+    s.courtNo ? `🏟️ ${courtLabel(s)}` : null,
     `📅 ${when}`,
     `💰 ${rm(s.fee)} per pax`,
-    lineup(s) ? `🧑‍🤝‍🧑 ${lineup(s)}` : null,
+    lineup(s) ? `🧍 ${lineup(s)}` : null,
     '',
     '📝 *Register below:*',
     ...(names.length ? names.map((n, i) => `${i + 1}. ${n}`) : ['Nobody yet. Be the first, don\'t be shy. 😏']),
@@ -510,8 +530,11 @@ function viewSession(id) {
         <label class="field"><span>Hours</span><input type="number" inputmode="decimal" step="0.5" min="0" data-field="hours" value="${s.hours ?? ''}" placeholder="–"></label>
       </div>
       <p class="muted small" id="time-range" style="margin:-4px 0 10px">${timeRange(s)}</p>
-      <label class="field"><span>Venue (optional)</span><input data-field="venue" value="${esc(s.venue)}" list="venues" placeholder="e.g. Picklers Arena" autocomplete="off"></label>
-      <datalist id="venues">${pastVenues().map(v => `<option value="${esc(v)}">`).join('')}</datalist>
+      <div class="grid-venue">
+        <label class="field" style="margin-bottom:4px"><span>Venue (optional)</span><input data-field="venue" value="${esc(s.venue)}" placeholder="e.g. Picklers Arena" autocomplete="off"></label>
+        <label class="field" style="margin-bottom:4px"><span>Court no.</span><input data-field="courtNo" value="${esc(s.courtNo)}" placeholder="e.g. 3 & 4" autocomplete="off"></label>
+      </div>
+      <div class="chips venue-chips" id="venue-suggest">${venueSuggestHtml(s)}</div>
       <div class="grid4">
         <label class="field"><span>Per pax (RM)</span><input type="number" inputmode="decimal" step="0.01" min="0" data-field="fee" value="${s.fee}"></label>
         <label class="field"><span>Court cost (RM)</span><input type="number" inputmode="decimal" step="0.01" min="0" data-field="courtCost" value="${s.courtCost}"></label>
@@ -784,6 +807,7 @@ function toCsv() {
   line('Start', s => s.startTime);
   line('Hours', s => s.hours ?? '');
   line('Venue', s => s.venue);
+  line('Court no.', s => s.courtNo);
   line('Court cost', s => s.courtCost.toFixed(2));
   line('Courts', s => s.courts ?? '');
   line('Players (planned)', s => s.maxPlayers ?? '');
@@ -829,7 +853,7 @@ const actions = {
     const last = sorted()[0];
     const s = {
       id: uid(), date: today(),
-      startTime: last?.startTime ?? '', hours: last?.hours ?? null, venue: last?.venue ?? '',
+      startTime: last?.startTime ?? '', hours: last?.hours ?? null, venue: last?.venue ?? '', courtNo: '',
       fee: last?.fee ?? 20, courtCost: last?.courtCost ?? 0, courts: last?.courts ?? null, maxPlayers: last?.maxPlayers ?? null, attendees: [],
     };
     db.sessions.push(s);
@@ -854,6 +878,12 @@ const actions = {
     render();
   },
   'clear-sel'() { selected.clear(); render(); },
+  'pick-venue'(el, s) {
+    s.venue = el.dataset.venue;
+    save();
+    document.querySelector('[data-field=venue]').value = s.venue;
+    document.getElementById('venue-suggest').innerHTML = venueSuggestHtml(s);
+  },
   'filter'(el) {
     homeFilter = el.dataset.id;
     try { localStorage.setItem('pb-home-filter', homeFilter); } catch {}
@@ -970,12 +1000,12 @@ main.addEventListener('input', e => {
     return;
   }
   const field = e.target.dataset.field;
-  if (!['fee', 'courtCost', 'courts', 'maxPlayers', 'startTime', 'hours', 'venue'].includes(field)) return;
+  if (!['fee', 'courtCost', 'courts', 'maxPlayers', 'startTime', 'hours', 'venue', 'courtNo'].includes(field)) return;
   const v = e.target.value;
   if (field === 'courts' || field === 'maxPlayers') { const n = parseInt(v, 10); s[field] = n > 0 ? n : null; }
   else if (field === 'hours') s.hours = num(v) > 0 ? num(v) : null;
   else if (field === 'startTime') s.startTime = /^\d{2}:\d{2}$/.test(v) ? v : '';
-  else if (field === 'venue') s.venue = v.trim();
+  else if (field === 'venue' || field === 'courtNo') s[field] = v.trim();
   else s[field] = Math.max(0, num(v));
   save();
   document.getElementById('summary').innerHTML = summaryHtml(s);
@@ -984,6 +1014,7 @@ main.addEventListener('input', e => {
   document.getElementById('invite-count').textContent = inviteCount(s);
   const mp = document.querySelector('[data-field=maxPlayers]');
   if (mp) mp.placeholder = s.courts ? s.courts * 4 : '–';
+  if (field === 'venue') document.getElementById('venue-suggest').innerHTML = venueSuggestHtml(s, v);
 });
 
 main.addEventListener('change', e => {

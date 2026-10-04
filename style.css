@@ -175,3 +175,6 @@ input:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-co
 #toast { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translate(-50%, 16px); background: var(--inverse); color: var(--on-inverse); padding: 12px 18px; border-radius: 8px; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; font-weight: 500; white-space: nowrap; z-index: 10; }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
 body.has-bar #toast { bottom: calc(168px + env(safe-area-inset-bottom)); }
+.venue-chips { margin: 0 0 12px; }
+.venue-chips:empty { display: none; }
+.grid-venue { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 8px; }
