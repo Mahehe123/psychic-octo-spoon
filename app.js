@@ -186,9 +186,12 @@ function calc(s) {
   const paid = s.attendees.filter(a => a.paid).length;
   const unpaid = isDue(s) ? s.attendees.length - paid : 0;
   const revenue = r2(paid * s.fee);
+  // Before game day: expected (unrealised) revenue = everyone registered x fee.
+  const expected = r2(s.attendees.length * s.fee);
   return {
-    paid, unpaid, revenue,
+    paid, unpaid, revenue, expected,
     pl: r2(revenue - s.courtCost),
+    expectedPl: r2(expected - s.courtCost),
     outstanding: r2(unpaid * s.fee),
     perCourt: s.courts ? r2(s.courtCost / s.courts) : null,
     seats: capacity(s) == null ? null : capacity(s) - s.attendees.length,
@@ -247,7 +250,8 @@ function venueSuggestHtml(s, filter = '') {
 function ledger() {
   const t = today();
   let now = 0, upcoming = 0;
-  db.sessions.forEach(s => { const pl = calc(s).pl; if (s.date <= t) now += pl; else upcoming += pl; });
+  // Today's balance counts realised money; upcoming sessions count expected revenue.
+  db.sessions.forEach(s => { const c = calc(s); if (s.date <= t) now += c.pl; else upcoming += c.expectedPl; });
   db.expenses.forEach(e => { if (e.date <= t) now -= e.amount; else upcoming -= e.amount; });
   return { now: r2(now), upcoming: r2(upcoming), projected: r2(now + upcoming) };
 }
@@ -407,7 +411,9 @@ function sessionCard(s) {
         <div class="title">${d.toLocaleDateString('en-GB', { weekday: 'long' })}${!isDue(s) ? '<span class="chip-s">Upcoming</span>' : c.unpaid ? `<span class="chip-s warn">${c.unpaid} unpaid</span>` : ''}</div>
         <div class="muted small">${c.paid}/${s.attendees.length} paid · ${rm(s.fee)}/pax${s.courts ? ` · ${s.courts} court${s.courts > 1 ? 's' : ''}` : ''}</div>
       </div>
-      <div class="amt ${c.pl < 0 ? 'neg' : 'pos'}">${rm(c.pl)}</div>
+      ${isDue(s)
+        ? `<div class="amt ${c.pl < 0 ? 'neg' : 'pos'}">${rm(c.pl)}</div>`
+        : `<div class="amt expected ${c.expectedPl < 0 ? 'neg' : 'pos'}" title="Expected">≈ ${rm(c.expectedPl)}<small>expected</small></div>`}
       <span class="chev">${icon('chevron')}</span>
     </a>`;
 }
@@ -446,7 +452,7 @@ function viewSessions() {
       <div class="big">${rm(l.now)}</div>
       <div class="minis">
         <a class="mini" href="#/owed"><span>To collect</span><b>${rm(out)}</b></a>
-        <div class="mini"><span>Booked ahead</span><b>${rm(l.upcoming)}</b></div>
+        <div class="mini"><span>Upcoming (expected)</span><b>${rm(l.upcoming)}</b></div>
       </div>
       ${l.upcoming ? `<div class="projected">${icon('trending')}After upcoming sessions: <b>${rm(l.projected)}</b></div>` : ''}
     </section>
@@ -500,8 +506,17 @@ function perCourtText(s) {
 }
 function summaryHtml(s) {
   const c = calc(s);
+  const paidLine = `${c.paid} / ${s.attendees.length} registered${s.maxPlayers ? ` · ${s.maxPlayers} planned` : ''}`;
+  if (!isDue(s)) {
+    return `
+    <div class="sum"><span>Paid</span><span>${paidLine}</span></div>
+    <div class="sum"><span>Expected revenue <span class="muted small">(${s.attendees.length} × ${rm(s.fee)})</span></span><span>${rm(c.expected)}</span></div>
+    <div class="sum"><span>Court cost</span><span>-${rm(s.courtCost)}</span></div>
+    <div class="sum total"><span>Expected profit</span><span class="${c.expectedPl < 0 ? 'neg' : 'pos'}">${rm(c.expectedPl)}</span></div>
+    <div class="sum small muted"><span>Becomes actual revenue on game day${c.paid ? ` · ${rm(c.revenue)} paid early` : ''}</span><span></span></div>`;
+  }
   return `
-    <div class="sum"><span>Paid</span><span>${c.paid} / ${s.attendees.length} players</span></div>
+    <div class="sum"><span>Paid</span><span>${paidLine}</span></div>
     <div class="sum"><span>Revenue</span><span>${rm(c.revenue)}</span></div>
     <div class="sum"><span>Court cost</span><span>-${rm(s.courtCost)}</span></div>
     <div class="sum total"><span>Profit / Loss</span><span class="${c.pl < 0 ? 'neg' : 'pos'}">${rm(c.pl)}</span></div>
@@ -812,7 +827,9 @@ function toCsv() {
   line('Courts', s => s.courts ?? '');
   line('Players (planned)', s => s.maxPlayers ?? '');
   line('Per pax', s => s.fee.toFixed(2));
+  line('Registered', s => s.attendees.length);
   line('Revenue', s => calc(s).revenue.toFixed(2));
+  line('Expected revenue', s => calc(s).expected.toFixed(2));
   line('Profit / Loss', s => calc(s).pl.toFixed(2));
   if (db.expenses.length) {
     rows.push([]);
@@ -823,7 +840,7 @@ function toCsv() {
   const l = ledger();
   rows.push([]);
   rows.push(['Bank (today)', l.now.toFixed(2)]);
-  rows.push(['Booked ahead', l.upcoming.toFixed(2)]);
+  rows.push(['Upcoming (expected)', l.upcoming.toFixed(2)]);
   rows.push(['Projected', l.projected.toFixed(2)]);
   return rows.map(r => r.map(cell).join(',')).join('\r\n');
 }

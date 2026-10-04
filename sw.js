@@ -1,5 +1,5 @@
 // Bump CACHE when you change app files.
-const CACHE = 'pickleball-v13';
+const CACHE = 'pickleball-v14';
 const ASSETS = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
