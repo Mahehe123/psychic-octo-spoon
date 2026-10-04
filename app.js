@@ -292,30 +292,23 @@ async function copy(text, done = 'Copied, the reminder is ✨') {
   catch { ask({ title: 'Copy this message', text, ok: 'Done', cancel: null }); }
 }
 
-// ---------- invitation (Jedi style) ----------
-// Each opening announces the upcoming game; `d` is "Today", "Tomorrow", "Saturday" or "Saturday 17 Oct".
+// ---------- invitation (cheeky style) ----------
+// Openings are functions of the session; ones needing a start time are skipped when it's blank.
+const startLabel = s => timeRange({ ...s, hours: null });
 const INVITE_OPENINGS = [
-  d => `${d}, a battle on the court there will be.`,
-  d => `Booked, the courts are. ${d}, the dinking begins.`,
-  d => `Summon the padawans, the Council does. ${d}, we play.`,
-  d => `A game approaching, I sense. ${d}, it is.`,
-  d => `Rest your knees now, you should. ${d}, need them you will.`,
-  d => `Gather, the Jedi must. ${d}, train we will.`,
-  d => `Ready your paddle, you must. ${d}, the battle comes.`,
+  { icon: '⚔️', needsTime: true, text: s => `Samurai draw sword on time, you draw paddle late? ${startLabel(s)} sharp, or sit out first game, baka!` },
+  { icon: '🏓', text: () => 'Paddle ready? Ball ready? Excuses ready? Okay, let\'s go!' },
+  { icon: '💀', text: () => 'Are you ready to get bodybagged? Register below!' },
+  { icon: '😏', text: () => 'Wah, you think you can win ah? Cute. Register below.' },
+  { icon: '🐣', text: () => 'Beginner also welcome. We bodybag gently, at first.' },
+  { icon: '💥', text: () => 'Lob ball? Ready to get smashed? Register now to get smashed!' },
 ];
-function gameDay(s) {
-  const days = Math.round((new Date(s.date + 'T00:00:00') - new Date(today() + 'T00:00:00')) / 864e5);
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Tomorrow';
-  const weekday = fmtDate(s.date, { weekday: 'long' });
-  return days > 1 && days < 7 ? weekday : `${weekday} ${fmtDate(s.date, { day: 'numeric', month: 'short' })}`;
-}
 const INVITE_CLOSINGS = [
-  'Join the training, you must. Weak, your backhand is. 😏',
-  'Skip this, you will? To the dark side, the couch leads. 🛋️',
-  'Afraid of a plastic ball, a true Jedi is not. 👀',
-  'Reply "in", or a youngling forever you remain. 🍼',
-  'Much to learn, you still have. Start this session, you will. 🏓',
+  'Reply fast-fast. Slots finish, don\'t say I never jio. 😏',
+  'Late reply, late arrival, early exit. Choose wisely, baka. 🗡️',
+  'Don\'t worry, we\'ll go easy on you. (We won\'t.) 😈',
+  'Come lah. Sweat now, sleep like a baby later. 😴',
+  'Your paddle\'s been collecting dust. Disgraceful. 🧹',
 ];
 // Pick a random line, but never the same one as last time.
 const lastPicked = {};
@@ -328,16 +321,17 @@ function pickFresh(key, arr) {
 function inviteMessage(s) {
   const names = s.attendees.map(a => pname(a.playerId));
   const when = [fmtDate(s.date, { weekday: 'short', day: 'numeric', month: 'short' }), timeRange(s)].filter(Boolean).join(' · ');
+  const opening = pickFresh('opening', INVITE_OPENINGS.filter(o => !o.needsTime || s.startTime));
   return [
-    `🟢 *${pickFresh('opening', INVITE_OPENINGS)(gameDay(s))}* 🏓`,
+    `${opening.icon} *${opening.text(s)}*`,
     '',
-    s.venue ? `🏛️ Temple: ${s.venue}` : null,
+    s.venue ? `📍 ${s.venue}` : null,
     `📅 ${when}`,
-    `💰 ${rm(s.fee)} per padawan`,
-    lineup(s) ? `👥 ${lineup(s)}` : null,
+    `💰 ${rm(s.fee)} per pax`,
+    lineup(s) ? `🧑‍🤝‍🧑 ${lineup(s)}` : null,
     '',
-    '🧘 *Jedi to be:*',
-    ...(names.length ? names.map((n, i) => `${i + 1}. ${n}`) : ['none yet… the chosen one, you could be. 👀']),
+    '📝 *Register below:*',
+    ...(names.length ? names.map((n, i) => `${i + 1}. ${n}`) : ['Nobody yet. Be the first, don\'t be shy. 😏']),
     '',
     pickFresh('closing', INVITE_CLOSINGS),
   ].filter(line => line !== null).join('\n');
@@ -554,7 +548,7 @@ function viewSession(id) {
         <h2 class="card-title">Invite</h2>
         <span class="muted small" id="invite-count">${inviteCount(s)}</span>
       </div>
-      <p class="hint">Jedi-style invite with everyone who’s in. Opening and closing lines change each time.</p>
+      <p class="hint">Cheeky invite with everyone who’s in. Opening and closing lines change each time.</p>
       <button class="btn primary block" data-act="copy-invite" data-sid="${s.id}">${icon('copy')}Copy invite</button>
     </section>
     ${actionBar()}`;
