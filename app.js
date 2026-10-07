@@ -316,19 +316,13 @@ async function copy(text, done = 'Copied, the reminder is ✨') {
 }
 
 // ---------- invitation (cheeky style) ----------
-// Openings are functions of the session; ones needing a start time are skipped when it's blank.
-const startLabel = s => timeRange({ ...s, hours: null });
 const INVITE_OPENINGS = [
-  { icon: '⚔️', needsTime: true, text: s => `Samurai draw sword on time, you draw paddle late? ${startLabel(s)} sharp, or sit out first game, baka!` },
-  { icon: '🏓', text: () => 'Paddle ready? Ball ready? Excuses ready? Okay, let\'s go!' },
-  { icon: '💀', text: () => 'Are you ready to get bodybagged? Register below!' },
-  { icon: '😏', text: () => 'Wah, you think you can win ah? Cute. Register below.' },
-  { icon: '🐣', text: () => 'Beginner also welcome. We bodybag gently, at first.' },
-  { icon: '💥', text: () => 'Lob ball? Ready to get smashed? Register now to get smashed!' },
+  { icon: '💀', text: 'Are you ready to get bodybagged? Register below!' },
+  { icon: '😏', text: 'Wah, you think you can win ah? Cute. Register below.' },
+  { icon: '🐣', text: 'Beginner also welcome. We bodybag gently, at first.' },
+  { icon: '💥', text: 'Lob ball? Ready to get smashed? Register now to get smashed!' },
 ];
 const INVITE_CLOSINGS = [
-  'Reply fast-fast. Slots finish, don\'t say I never jio. 😏',
-  'Late reply, late arrival, early exit. Choose wisely, baka. 🗡️',
   'Don\'t worry, we\'ll go easy on you. (We won\'t.) 😈',
   'Come lah. Sweat now, sleep like a baby later. 😴',
   'Your paddle\'s been collecting dust. Disgraceful. 🧹',
@@ -344,9 +338,9 @@ function pickFresh(key, arr) {
 function inviteMessage(s) {
   const names = s.attendees.map(a => pname(a.playerId));
   const when = [fmtDate(s.date, { weekday: 'short', day: 'numeric', month: 'short' }), timeRange(s)].filter(Boolean).join(' · ');
-  const opening = pickFresh('opening', INVITE_OPENINGS.filter(o => !o.needsTime || s.startTime));
+  const opening = pickFresh('opening', INVITE_OPENINGS);
   return [
-    `${opening.icon} *${opening.text(s)}*`,
+    `${opening.icon} *${opening.text}*`,
     '',
     s.venue ? `📍 ${s.venue}` : null,
     s.courtNo ? `🏟️ ${courtLabel(s)}` : null,
