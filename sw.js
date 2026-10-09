@@ -1,5 +1,5 @@
 // Bump CACHE when you change app files.
-const CACHE = 'pickleball-v15';
+const CACHE = 'pickleball-v16';
 const ASSETS = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -9,7 +9,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k.startsWith('pickleball-v') && k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -20,7 +20,7 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
-    const network = fetch(e.request).then(res => {
+    const network = fetch(e.request, { cache: 'no-cache' }).then(res => {
       if (res.ok) cache.put(e.request, res.clone());
       return res;
     });

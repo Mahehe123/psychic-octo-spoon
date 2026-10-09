@@ -207,14 +207,6 @@ function perCourtPlayers(s) {
   const lo = Math.floor(cap / s.courts), hi = Math.ceil(cap / s.courts);
   return lo === hi ? `${lo}` : `${lo}–${hi}`;
 }
-// "12 players · 6 per court", "12 players", "2 courts" or ''
-function lineup(s) {
-  const courts = s.courts ? `${s.courts} court${s.courts === 1 ? '' : 's'}` : '';
-  if (!s.maxPlayers) return courts;
-  const pp = perCourtPlayers(s);
-  return [`${s.maxPlayers} players`, pp && `${pp} per court`, courts].filter(Boolean).join(' · ');
-}
-
 // "8:00 PM – 10:00 PM", "8:00 PM", "2 hours" or ''
 function timeRange(s) {
   const fmt = mins => {
@@ -316,17 +308,23 @@ async function copy(text, done = 'Copied, the reminder is ✨') {
 }
 
 // ---------- invitation (cheeky style) ----------
+// {day} {courts} {hours} {planned} {fee} are filled from the session; lines whose values are missing are skipped.
 const INVITE_OPENINGS = [
-  { icon: '💀', text: 'Are you ready to get bodybagged? Register below!' },
-  { icon: '😏', text: 'Wah, you think you can win ah? Cute. Register below.' },
-  { icon: '🐣', text: 'Beginner also welcome. We bodybag gently, at first.' },
-  { icon: '💥', text: 'Lob ball? Ready to get smashed? Register now to get smashed!' },
+  'Paddles up, legends! The kitchen opens on {day} 🏓',
+  'Calling all dinkers. Your knees have one more game in them.',
+  '{courts} courts. {hours} hours. Zero excuses.',
+  'The ball is yellow, the courts are booked, and you\'re out of excuses.',
+  'Weather forecast for {day}: 100% chance of lobs.',
 ];
 const INVITE_CLOSINGS = [
-  'Don\'t worry, we\'ll go easy on you. (We won\'t.) 😈',
-  'Come lah. Sweat now, sleep like a baby later. 😴',
-  'Your paddle\'s been collecting dust. Disgraceful. 🧹',
+  'Late payers get served from the kitchen line. Literally.',
+  'First {planned} get courts. Everyone else gets regret.',
+  'Bring water, bring a friend, bring RM{fee}.',
+  'No-show still pays. I don\'t make the rules. (I do make the rules.)',
+  'See you at the net. Don\'t volley in the kitchen.',
 ];
+const fillIn = (t, v) => t.replace(/\{(\w+)\}/g, (m, k) => v[k] ?? m);
+const canFill = (t, v) => [...t.matchAll(/\{(\w+)\}/g)].every(([, k]) => v[k] != null);
 // Pick a random line, but never the same one as last time.
 const lastPicked = {};
 function pickFresh(key, arr) {
@@ -337,21 +335,24 @@ function pickFresh(key, arr) {
 
 function inviteMessage(s) {
   const names = s.attendees.map(a => pname(a.playerId));
-  const when = [fmtDate(s.date, { weekday: 'short', day: 'numeric', month: 'short' }), timeRange(s)].filter(Boolean).join(' · ');
-  const opening = pickFresh('opening', INVITE_OPENINGS);
+  const planned = capacity(s);
+  const fee = r2(s.fee) % 1 ? r2(s.fee).toFixed(2) : r2(s.fee);
+  const v = { day: fmtDate(s.date, { weekday: 'long' }), fee, courts: s.courts || null, hours: s.hours || null, planned };
+  const time = timeRange(s);
+  const hrs = s.hours ? `${s.hours} hr${s.hours === 1 ? '' : 's'}` : '';
+  const place = [s.venue, courtLabel(s)].filter(Boolean).join(' · ');
+  const slots = Math.max(planned || 0, names.length, 1);
   return [
-    `${opening.icon} *${opening.text}*`,
+    fillIn(pickFresh('opening', INVITE_OPENINGS.filter(t => canFill(t, v))), v),
     '',
-    s.venue ? `📍 ${s.venue}` : null,
-    s.courtNo ? `🏟️ ${courtLabel(s)}` : null,
-    `📅 ${when}`,
-    `💰 ${rm(s.fee)} per pax`,
-    lineup(s) ? `🧍 ${lineup(s)}` : null,
+    `📅 ${fmtDate(s.date, { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })}`,
+    s.startTime ? `⏰ ${time}${hrs ? ` (${hrs})` : ''}` : hrs ? `⏰ ${hrs}` : null,
+    place ? `📍 ${place}` : null,
+    `💵 RM${fee} per pax`,
     '',
-    '📝 *Register below:*',
-    ...(names.length ? names.map((n, i) => `${i + 1}. ${n}`) : ['Nobody yet. Be the first, don\'t be shy. 😏']),
+    ...Array.from({ length: slots }, (_, i) => `${i + 1}. ${names[i] || ''}`),
     '',
-    pickFresh('closing', INVITE_CLOSINGS),
+    fillIn(pick(INVITE_CLOSINGS.filter(t => canFill(t, v))), v),
   ].filter(line => line !== null).join('\n');
 }
 

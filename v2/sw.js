@@ -1,6 +1,6 @@
 // Bump CACHE when you change app files.
 // v2 lives next to v1 on the same origin: only clean up v2's own caches.
-const CACHE = 'pickleball-2.0-v2';
+const CACHE = 'pickleball-2.0-v3';
 const ASSETS = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -21,7 +21,7 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
-    const network = fetch(e.request).then(res => {
+    const network = fetch(e.request, { cache: 'no-cache' }).then(res => {
       if (res.ok) cache.put(e.request, res.clone());
       return res;
     });
