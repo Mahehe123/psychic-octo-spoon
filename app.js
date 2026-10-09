@@ -207,6 +207,7 @@ function perCourtPlayers(s) {
   const lo = Math.floor(cap / s.courts), hi = Math.ceil(cap / s.courts);
   return lo === hi ? `${lo}` : `${lo}–${hi}`;
 }
+
 // "8:00 PM – 10:00 PM", "8:00 PM", "2 hours" or ''
 function timeRange(s) {
   const fmt = mins => {
@@ -441,15 +442,12 @@ function viewSessions() {
     .filter(c => c[2]);
 
   return `
-    <header class="appbar"><h1>Pickleball<span class="sub">Payment tracker</span></h1></header>
-    <section class="hero">
-      <div class="k">Bank balance · today</div>
-      <div class="big">${rm(l.now)}</div>
-      <div class="minis">
-        <a class="mini" href="#/owed"><span>To collect</span><b>${rm(out)}</b></a>
-        <div class="mini"><span>Upcoming (expected)</span><b>${rm(l.upcoming)}</b></div>
-      </div>
-      ${l.upcoming ? `<div class="projected">${icon('trending')}After upcoming sessions: <b>${rm(l.projected)}</b></div>` : ''}
+    <header class="appbar"><h1>Pickleball<span class="sub">Who played. Who paid. Who owes.</span></h1></header>
+    <section class="tiles">
+      <div class="tile lead"><span class="t">Today</span><b class="v">${rm(l.now)}</b></div>
+      <a class="tile owe" href="#/owed"><span class="t">To collect</span><b class="v">${rm(out)}</b></a>
+      <div class="tile"><span class="t">Upcoming</span><b class="v">${rm(l.upcoming)}</b></div>
+      <div class="tile"><span class="t">Projected</span><b class="v">${rm(l.projected)}</b></div>
     </section>
 
     <div class="quick">
@@ -625,13 +623,10 @@ function viewOwed() {
   const players = new Set(list.flatMap(s => s.attendees.filter(a => !a.paid).map(a => a.playerId)));
   return `
     <header class="appbar"><h1>Unpaid<span class="sub">Sessions on or before today</span></h1></header>
-    <section class="hero">
-      <div class="k">Total to collect</div>
-      <div class="big">${rm(totalUnpaid())}</div>
-      <div class="minis">
-        <div class="mini"><span>Sessions</span><b>${list.length}</b></div>
-        <div class="mini"><span>Players</span><b>${players.size}</b></div>
-      </div>
+    <section class="tiles">
+      <div class="tile owe wide"><span class="t">Total to collect</span><b class="v">${rm(totalUnpaid())}</b></div>
+      <div class="tile"><span class="t">Sessions</span><b class="v">${list.length}</b></div>
+      <div class="tile"><span class="t">Players</span><b class="v">${players.size}</b></div>
     </section>
     ${!list.length ? `<div class="empty">${icon('doneAll')}Everyone has paid. Pleased, Master Yoda is.</div>` : `
       <p class="hint">Tap names (across any sessions) to select, then copy one reminder.</p>

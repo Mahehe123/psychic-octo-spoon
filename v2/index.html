@@ -1,23 +1,10 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#EDF1EC" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0D181A" media="(prefers-color-scheme: dark)">
-  <title>Pickleball v2</title>
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icon-192.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <main id="main"></main>
-  <nav class="tabs" id="nav"></nav>
-  <div id="toast" role="status" aria-live="polite"></div>
-  <input type="file" id="import-file" accept="application/json,.json" hidden>
-  <script src="app.js"></script>
-</body>
-</html>
+<meta charset="utf-8">
+<title>Pickleball Tracker</title>
+<!-- v2 was merged into the main app. Old installs land here and get sent on. -->
+<meta http-equiv="refresh" content="0; url=../">
+<script>
+  navigator.serviceWorker?.getRegistration('./').then(r => r && r.scope.endsWith('/v2/') && r.unregister());
+  location.replace('../');
+</script>
+<p><a href="../">Pickleball Tracker has moved here.</a></p>
